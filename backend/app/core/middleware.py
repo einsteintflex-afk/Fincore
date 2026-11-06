@@ -103,7 +103,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
               or (request.client.host if request.client else "unknown"))
         path = request.url.path
-        is_auth = "/auth/" in path and request.method == "POST"
+        # Strict bucket only for credential-guessing surfaces; token refresh uses the general limit.
+        is_auth = request.method == "POST" and path.endswith(
+            ("/auth/login", "/auth/login/2fa", "/auth/register", "/auth/password/forgot", "/auth/password/reset"))
         ok, retry = self._allow(f"{ip}:{'auth' if is_auth else 'all'}",
                                 self.auth_per_minute if is_auth else self.per_minute)
         if not ok:

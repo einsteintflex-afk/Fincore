@@ -33,7 +33,7 @@ from app.providers import get_provider, route
 from app.providers.base import CollectionRequest, DisbursementRequest, ProviderResult
 from app.services import fees, limits, risk
 from app.services.audit import audit
-from app.services.ghana import BANKS, NETWORK_NAMES, detect_network, normalize_msisdn, validate_bank
+from app.services.ghana import BANKS, NETWORK_NAMES, detect_network, local_format, normalize_msisdn, validate_bank
 from app.services.ledger import CR, DR, LedgerService, Line, SystemAccount
 from app.services.notifications import notify
 from app.services.restrictions import ensure_user_can_credit, ensure_user_can_debit, ensure_wallet_can_receive
@@ -174,7 +174,7 @@ class TransactionService:
             msisdn = normalize_msisdn(phone)
             network = detect_network(msisdn)
             return ({"msisdn": msisdn, "network": network.value, "name": account_name,
-                     "label": f"{NETWORK_NAMES[network]} {msisdn}"}, network.value)
+                     "label": f"{NETWORK_NAMES[network]} {local_format(msisdn)}"}, network.value)
         if channel == Channel.BANK:
             if not (bank_code and account_number):
                 raise ValidationFailed("Bank code and account number are required for bank withdrawals")

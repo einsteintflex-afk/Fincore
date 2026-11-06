@@ -1,0 +1,66 @@
+# FinCore full stack for local development / demos.
+#   docker compose up --build
+#   open http://localhost:8080 (web)  ·  http://localhost:8000/docs (API)
+# Load demo data:   docker compose run --rm api python -m app.cli demo-data
+# Database backup:  docker compose --profile ops run --rm backup
+name: fincore
+
+x-api-env: &api-env
+  FINCORE_ENVIRONMENT: ${FINCORE_ENVIRONMENT:-development}
+  FINCORE_DATABASE_URL: postgresql+psycopg://fincore:${POSTGRES_PASSWORD:-fincore}@db:5432/fincore
+  FINCORE_SECRET_KEY: ${FINCORE_SECRET_KEY:-dev-only-insecure-secret-key-change-me-0123456789abcdef}
+  FINCORE_ENCRYPTION_KEY: ${FINCORE_ENCRYPTION_KEY:-}
+  FINCORE_FRONTEND_BASE_URL: ${FINCORE_FRONTEND_BASE_URL:-http://localhost:8080}
+  FINCORE_CORS_ORIGINS: '["http://localhost:8080","http://localhost:5173"]'
+  FINCORE_LIVE_PAYMENTS_ENABLED: "false"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fincore
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fincore}
+      POSTGRES_DB: fincore
+    volumes: [pgdata:/var/lib/postgresql/data]
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fincore"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: ./backend
+    command: sh -c "alembic upgrade head && python -m app.cli seed"
+    environment: *api-env
+    depends_on: { db: { condition: service_healthy } }
+
+  api:
+    build: ./backend
+    environment: *api-env
+    ports: ["8000:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    build: ./backend
+    command: python -m app.cli worker
+    environment: *api-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    build: ./frontend
+    ports: ["8080:80"]
+    depends_on: [api]
+
+  backup:
+    image: postgres:16-alpine
+    profiles: ["ops"]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-fincore}
+    volumes: ["./backups:/backups"]
+    entrypoint: ["sh", "-c", "pg_dump -h db -U fincore -Fc fincore > /backups/fincore-latest.dump && echo backup written to backups/fincore-latest.dump"]
+    depends_on: [db]
+
+volumes:
+  pgdata:
