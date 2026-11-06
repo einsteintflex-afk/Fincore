@@ -320,7 +320,10 @@ class PaymentService:
                 "created_at": refund.created_at}
 
     # ================================================================ settlements
-    def settle(self, business: Business, actor: User, amount: object | None = None) -> Settlement:
+    def settle(self, business: Business, actor: User | None, amount: object | None = None,
+               note: str | None = None) -> Settlement:
+        """Pay out the merchant wallet. ``actor=None`` means a scheduled (system) settlement."""
+        actor_id = actor.id if actor else None
         db = self.db
         ensure_business_can_debit(business)
         dest = business.settlement_destination or {}
@@ -344,12 +347,12 @@ class PaymentService:
                  else dest.get("msisdn"))
         settlement = Settlement(reference=generate_reference("STL"), business_id=business.id, amount=amount, fee=fee,
                                 currency=wallet.currency, status="processing", destination=dest,
-                                initiated_by_id=actor.id)
+                                initiated_by_id=actor_id, note=note)
         db.add(settlement)
         db.flush()
         txn = Transaction(
             reference=generate_reference("STL"), type=TxnType.SETTLEMENT, status=TxnStatus.PENDING, channel=channel,
-            amount=amount, fee=fee, currency=wallet.currency, source_wallet_id=wallet.id, initiated_by_id=actor.id,
+            amount=amount, fee=fee, currency=wallet.currency, source_wallet_id=wallet.id, initiated_by_id=actor_id,
             business_id=business.id, provider=provider.code, provider_mode=provider.mode,
             counterparty={**dest, "name": dest.get("account_name"), "msisdn": dest.get("msisdn"),
                           "network": network, "label": label},
@@ -358,7 +361,8 @@ class PaymentService:
         db.flush()
         self.txns._hold(txn, wallet)  # raises InsufficientFunds if balance is too low
         settlement.transaction_id = txn.id
-        audit(db, "business.settlement_initiated", actor_id=actor.id, target_type="business",
+        audit(db, "business.settlement_initiated", actor_id=actor_id, actor_type="user" if actor else "system",
+              target_type="business",
               target_id=business.id, details={"amount": amount, "fee": fee, "settlement": settlement.reference})
         db.commit()
         self.txns._send_payout(txn)
