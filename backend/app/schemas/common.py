@@ -708,3 +708,18 @@ class GatewayRefundIn(BaseModel):
 
 class SandboxResolveIn(BaseModel):
     status: str = Field(pattern="^(successful|failed)$")
+
+
+class ApprovalOut(ORM):
+    id: uuid.UUID
+    action: str
+    payload: dict
+    amount: str | None
+    reason: str
+    status: str
+    requested_by_id: uuid.UUID
+    reviewed_by_id: uuid.UUID | None
+    review_note: str | None
+    reviewed_at: datetime | None
+    result: dict
+    created_at: datetime

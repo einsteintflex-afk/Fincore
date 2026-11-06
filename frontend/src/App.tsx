@@ -81,6 +81,7 @@ export default function App() {
         <Route path="transactions" element={<Admin.AdminTransactions />} />
         <Route path="fraud" element={<Admin.AdminFraud />} />
         <Route path="finance" element={<Admin.AdminFinance />} />
+        <Route path="approvals" element={<Admin.AdminApprovals />} />
         <Route path="config" element={<Admin.AdminConfig />} />
         <Route path="support" element={<Admin.AdminSupport />} />
         <Route path="audit" element={<Admin.AdminAudit />} />

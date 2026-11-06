@@ -83,3 +83,20 @@ class ReconciliationRun(UUIDPk, Timestamps, Base):
     summary: Mapped[dict] = mapped_column(JSON, default=dict)
     discrepancies: Mapped[list] = mapped_column(JSON, default=list)
     run_by_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class ApprovalRequest(UUIDPk, Timestamps, Base):
+    """Maker-checker: a sensitive staff action waiting for a second, different staff member."""
+
+    __tablename__ = "approval_requests"
+
+    action: Mapped[str] = mapped_column(String(32), index=True)  # adjustment | reversal
+    payload: Mapped[dict] = mapped_column(JSON)
+    amount: Mapped[str | None] = mapped_column(String(32))
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    requested_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    reviewed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    review_note: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result: Mapped[dict] = mapped_column(JSON, default=dict)

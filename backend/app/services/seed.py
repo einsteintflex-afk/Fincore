@@ -42,6 +42,8 @@ LIMITS = {
 SETTINGS = {
     "maintenance_mode": ({"enabled": False, "message": ""}, "Block all money movement with a banner message"),
     "signup_enabled": ({"enabled": True}, "Allow new customer registrations"),
+    "approval_thresholds": ({"adjustment": "1000.00", "reversal": "5000.00"},
+                            "Amounts (GHS) above which a second staff member must approve"),
     "support_contact": ({"email": "support@fincore.example", "phone": "+233 30 000 0000"}, "Customer support contacts"),
 }
 

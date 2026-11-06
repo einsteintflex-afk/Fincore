@@ -184,3 +184,50 @@ def test_checkout_masks_customer_email(make_user, active_business):
                     {"amount": "5", "customer_email": "kwame.mensah@example.com"}).json()
     view = owner.client.get(f"/api/v1/checkout/{pr['reference']}").json()
     assert view["customer_email"] == "kw***@example.com"
+
+
+def test_large_adjustment_needs_second_approver(make_user, admin):
+    finance_b = make_user(role="finance")
+    u = make_user(kyc_tier=3)
+    body = {"wallet_account_number": u.wallet()["account_number"], "amount": "1500", "direction": "credit",
+            "reason": "Compensation for outage"}
+    r = admin.post("/admin/adjustments", body)
+    assert r.status_code == 202 and r.json()["approval_required"] is True
+    aid = r.json()["approval"]["id"]
+    assert Decimal(u.balance()) == 0  # nothing moved yet
+    r = admin.post(f"/admin/approvals/{aid}/review", {"decision": "approve"})
+    assert r.status_code == 403 and r.json()["error"]["code"] == "four_eyes"
+    assert len(finance_b.get("/admin/approvals").json()) == 1
+    r = finance_b.post(f"/admin/approvals/{aid}/review", {"decision": "approve", "note": "Verified"})
+    assert r.status_code == 200 and r.json()["status"] == "executed", r.text
+    assert Decimal(u.balance()) == Decimal("1500.00")
+    assert finance_b.post(f"/admin/approvals/{aid}/review", {"decision": "approve"}).status_code == 409
+    # small adjustments still execute immediately
+    small = {**body, "amount": "10"}
+    assert admin.post("/admin/adjustments", small).status_code == 200
+    integrity_ok()
+
+
+def test_large_reversal_rejected_by_checker(make_user, admin):
+    checker = make_user(role="finance")
+    a, b = make_user(kyc_tier=3), make_user(kyc_tier=3)
+    fund(a, "6000")
+    t = a.post("/transfers", {"wallet_id": a.wallet()["id"], "destination_account": b.wallet()["account_number"],
+                              "amount": "5500"}).json()
+    r = admin.post(f"/admin/transactions/{t['reference']}/reverse", {"reason": "Disputed"})
+    assert r.status_code == 202
+    aid = r.json()["approval"]["id"]
+    r = checker.post(f"/admin/approvals/{aid}/review", {"decision": "reject", "note": "Customer confirmed"})
+    assert r.json()["status"] == "rejected"
+    assert Decimal(b.balance()) == Decimal("5500.00")
+
+
+def test_approved_action_that_fails_is_recorded(make_user, admin):
+    checker = make_user(role="finance")
+    u = make_user(kyc_tier=3)
+    r = admin.post("/admin/adjustments", {"wallet_account_number": u.wallet()["account_number"], "amount": "2000",
+                                          "direction": "debit", "reason": "Clawback"})
+    aid = r.json()["approval"]["id"]
+    r = checker.post(f"/admin/approvals/{aid}/review", {"decision": "approve"})
+    assert r.json()["status"] == "failed" and r.json()["result"]["code"] == "insufficient_funds"
+    integrity_ok()

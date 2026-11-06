@@ -14,6 +14,8 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -23,15 +25,25 @@ from app.api.v1.wallets import txn_out, wallet_out
 from app.core.config import settings
 from app.core.database import get_db, utcnow
 from app.core.errors import Conflict, NotFound, ValidationFailed
+from app.core.money import validate_amount
 from app.models.business import Business, PaymentRequest
 from app.models.enums import RestrictionType, UserRole, UserStatus
 from app.models.ledger import LedgerAccount, LedgerTransaction
-from app.models.ops import AuditLog, FraudAlert, ReconciliationRun, SupportTicket, SystemSetting, TicketMessage
+from app.models.ops import (
+    ApprovalRequest,
+    AuditLog,
+    FraudAlert,
+    ReconciliationRun,
+    SupportTicket,
+    SystemSetting,
+    TicketMessage,
+)
 from app.models.transaction import FeeRule, LimitRule, Transaction
 from app.models.user import AccountRestriction, KycSubmission, User
 from app.providers import provider_status
 from app.schemas.common import (
     AdjustIn,
+    ApprovalOut,
     AuditOut,
     BusinessOut,
     FeeRuleIn,
@@ -56,7 +68,7 @@ from app.schemas.common import (
     TransactionOut,
     UserOut,
 )
-from app.services import analytics, kyc, reconciliation
+from app.services import analytics, approvals, kyc, reconciliation
 from app.services import business as bsvc
 from app.services.audit import audit
 from app.services.auth import revoke_all_sessions
@@ -302,11 +314,17 @@ def transaction_detail(reference: str, staff: User = Depends(staff_user), db: Se
             "fraud_alerts": [FraudAlertOut.model_validate(a) for a in alerts]}
 
 
-@router.post("/transactions/{reference}/reverse", response_model=TransactionOut)
+@router.post("/transactions/{reference}/reverse", response_model=None,
+             responses={200: {"model": TransactionOut}, 202: {"description": "Queued for second approval"}})
 def reverse(reference: str, body: ReverseIn, staff: User = Depends(finance), db: Session = Depends(get_db)):
     t = db.scalar(select(Transaction).where(Transaction.reference == reference))
     if not t:
         raise NotFound("Transaction not found")
+    if approvals.requires_approval(db, "reversal", t.amount):
+        req = approvals.request(db, staff, "reversal", {"transaction_id": str(t.id), "reference": t.reference,
+                                                         "reason": body.reason}, t.amount, body.reason)
+        return JSONResponse(status_code=202, content=jsonable_encoder(
+            {"approval_required": True, "approval": ApprovalOut.model_validate(req)}))
     return txn_out(TransactionService(db).reverse(t.id, staff, body.reason))
 
 
@@ -318,10 +336,30 @@ def requery(reference: str, staff: User = Depends(finance), db: Session = Depend
     return txn_out(TransactionService(db).refresh_from_provider(t))
 
 
-@router.post("/adjustments", response_model=TransactionOut)
+@router.post("/adjustments", response_model=None,
+             responses={200: {"model": TransactionOut}, 202: {"description": "Queued for second approval"}})
 def adjust(body: AdjustIn, staff: User = Depends(finance), db: Session = Depends(get_db)):
     w = wallet_by_number(db, body.wallet_account_number)
-    return txn_out(TransactionService(db).adjust(w, staff, body.amount, body.direction, body.reason))
+    amount = validate_amount(body.amount, w.currency)
+    if approvals.requires_approval(db, "adjustment", amount):
+        payload = {**body.model_dump(mode="json"), "amount": str(amount)}
+        req = approvals.request(db, staff, "adjustment", payload, amount, body.reason)
+        return JSONResponse(status_code=202, content=jsonable_encoder(
+            {"approval_required": True, "approval": ApprovalOut.model_validate(req)}))
+    return txn_out(TransactionService(db).adjust(w, staff, amount, body.direction, body.reason))
+
+
+# ================================================================ maker-checker approvals
+@router.get("/approvals", response_model=list[ApprovalOut])
+def list_approvals(status: str = "pending", staff: User = Depends(finance), db: Session = Depends(get_db)):
+    return db.scalars(select(ApprovalRequest).where(ApprovalRequest.status == status)
+                      .order_by(ApprovalRequest.created_at.desc()).limit(200)).all()
+
+
+@router.post("/approvals/{approval_id}/review", response_model=ApprovalOut)
+def review_approval(approval_id: uuid.UUID, body: ReviewIn, staff: User = Depends(finance),
+                    db: Session = Depends(get_db)):
+    return approvals.review(db, staff, approval_id, body.decision, body.note)
 
 
 # ================================================================ fraud

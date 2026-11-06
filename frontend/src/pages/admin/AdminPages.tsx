@@ -335,7 +335,11 @@ export function AdminTransactions() {
 function AdminTxnDetail({ reference, onClose }: { reference: string | null; onClose: () => void }) {
   const q = useGet<any>(["admin-txn", reference], reference ? `/admin/transactions/${reference}` : null);
   const [reason, setReason] = useState("");
-  const reverse = useAction(() => api(`/admin/transactions/${reference}/reverse`, { body: { reason } }), { invalidate: [["admin-txns"], ["admin-txn", reference]], success: "Transaction reversed", onSuccess: onClose });
+  const reverse = useAction(() => api(`/admin/transactions/${reference}/reverse`, { body: { reason } }), {
+    invalidate: [["admin-txns"], ["admin-txn", reference], ["approvals"]],
+    success: (r: any) => (r?.approval_required ? "Above threshold — sent for second approval" : "Transaction reversed"),
+    onSuccess: onClose,
+  });
   const requery = useAction(() => api(`/admin/transactions/${reference}/requery`, { method: "POST" }), { invalidate: [["admin-txns"], ["admin-txn", reference]], success: "Status refreshed" });
   const t = q.data?.transaction;
   return (
@@ -375,13 +379,17 @@ function AdminTxnDetail({ reference, onClose }: { reference: string | null; onCl
 function AdjustButton() {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ wallet_account_number: "", amount: "", direction: "credit", reason: "" });
-  const adj = useAction(() => api("/admin/adjustments", { body: f }), { invalidate: [["admin-txns"]], success: "Adjustment posted", onSuccess: () => setOpen(false) });
+  const adj = useAction(() => api("/admin/adjustments", { body: f }), {
+    invalidate: [["admin-txns"], ["approvals"]],
+    success: (r: any) => (r?.approval_required ? "Above threshold — sent for second approval" : "Adjustment posted"),
+    onSuccess: () => setOpen(false),
+  });
   return (
     <>
       <Button variant="secondary" onClick={() => setOpen(true)}>Manual adjustment</Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Manual wallet adjustment">
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); adj.mutate(undefined); }}>
-          <Alert tone="warning">Adjustments post against the ADJUSTMENTS ledger account and are audit-logged.</Alert>
+          <Alert tone="warning">Adjustments post against the ADJUSTMENTS ledger account and are audit-logged. Large amounts need a second approver.</Alert>
           <Input label="Wallet account number" value={f.wallet_account_number} onChange={(e) => setF({ ...f, wallet_account_number: e.target.value })} required />
           <Input label="Amount" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} required />
           <Select label="Direction" value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value })}><option value="credit">Credit wallet</option><option value="debit">Debit wallet</option></Select>
@@ -680,6 +688,58 @@ export function AdminAudit() {
       </Card>
       <Modal open={!!sel} onClose={() => setSel(null)} title={sel?.action ?? ""} wide>
         {sel && <pre className="overflow-x-auto rounded-lg bg-slate-50 p-4 text-xs">{JSON.stringify(sel, null, 2)}</pre>}
+      </Modal>
+    </>
+  );
+}
+
+// ------------------------------------------------------------------ maker-checker approvals
+export function AdminApprovals() {
+  const { user } = useAuth();
+  const [status, setStatus] = useState("pending");
+  const q = useGet<any[]>(["approvals", status], "/admin/approvals", { status });
+  const [sel, setSel] = useState<any>(null);
+  const [note, setNote] = useState("");
+  const review = useAction((decision: string) => api(`/admin/approvals/${sel.id}/review`, { body: { decision, note: note || null } }), {
+    invalidate: [["approvals"], ["admin-txns"]],
+    success: (r: any) => `Request ${r.status}`,
+    onSuccess: () => { setSel(null); setNote(""); },
+  });
+  return (
+    <>
+      <PageHeader title="Approvals" subtitle="Four-eyes control: high-value adjustments and reversals need a second finance/admin user." />
+      <Card>
+        <Tabs value={status} onChange={setStatus} tabs={["pending", "executed", "rejected", "failed"].map((s) => ({ value: s, label: titleCase(s) }))} />
+        {q.isLoading ? <Spinner /> : !q.data?.length ? <Empty title="Nothing waiting" /> : (
+          <Table rows={q.data} keyFn={(a) => a.id} onRowClick={setSel}
+            columns={[
+              { header: "Action", cell: (a) => titleCase(a.action) },
+              { header: "Amount", cell: (a) => money(a.amount) },
+              { header: "Reason", cell: (a) => a.reason },
+              { header: "Requested", cell: (a) => dateTime(a.created_at), hideOnMobile: true },
+              { header: "Status", cell: (a) => <Badge>{a.status}</Badge> },
+            ]} />
+        )}
+      </Card>
+      <Modal open={!!sel} onClose={() => setSel(null)} title={`${titleCase(sel?.action)} approval`}>
+        {sel && (
+          <>
+            <KV items={[["Amount", money(sel.amount)], ["Reason", sel.reason], ["Requested", dateTime(sel.created_at)],
+              ...Object.entries(sel.payload).filter(([k]) => !["reason", "amount"].includes(k)).map(([k, v]) => [titleCase(k), String(v)] as [string, string]),
+              ...(sel.result?.message || sel.result?.transaction ? [["Result", sel.result.transaction ?? sel.result.message] as [string, string]] : [])]} />
+            {sel.status === "pending" && (sel.requested_by_id === user?.id ? (
+              <div className="mt-4"><Alert tone="info">You raised this request — another finance or admin user must review it.</Alert></div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <Textarea label="Note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="danger" onClick={() => review.mutate("reject")} loading={review.isPending}>Reject</Button>
+                  <Button onClick={() => review.mutate("approve")} loading={review.isPending}>Approve & execute</Button>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </Modal>
     </>
   );
