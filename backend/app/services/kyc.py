@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.core.database import utcnow
 from app.core.errors import Conflict, NotFound, ValidationFailed
 from app.models.enums import KycStatus
+from app.models.ops import FraudAlert
 from app.models.user import KycSubmission, User
 from app.services.audit import audit
 from app.services.ghana import validate_ghana_card
@@ -63,6 +64,9 @@ def submit(db: Session, user: User, data: dict) -> KycSubmission:
     if db.scalar(select(KycSubmission.id).where(KycSubmission.user_id == user.id,
                                                 KycSubmission.status == KycStatus.PENDING)):
         raise Conflict("You already have a verification under review")
+    reused = db.scalar(select(KycSubmission.user_id).where(
+        KycSubmission.id_number == id_number, KycSubmission.user_id != user.id,
+        KycSubmission.status == KycStatus.APPROVED))
     sub = KycSubmission(user_id=user.id, tier_requested=tier, id_type=id_type, id_number=id_number,
                         first_name=data["first_name"].strip(), last_name=data["last_name"].strip(),
                         date_of_birth=dob, address=data.get("address"), digital_address=data.get("digital_address"),
@@ -70,6 +74,11 @@ def submit(db: Session, user: User, data: dict) -> KycSubmission:
     db.add(sub)
     db.flush()
     sub.verification_result = verifier.verify(sub)
+    if reused:
+        # Same national ID already verified on another account: a strong account-takeover/mule signal.
+        sub.verification_result = {**sub.verification_result, "duplicate_id_user": str(reused)}
+        db.add(FraudAlert(user_id=user.id, rule="duplicate_identity", severity="high", score=70,
+                          details={"id_type": id_type, "other_user": str(reused)}))
     audit(db, "kyc.submitted", actor_id=user.id, target_type="kyc", target_id=sub.id, details={"tier": tier})
     notify(db, user.id, "kyc", "Verification submitted", "We're reviewing your documents. This usually takes 1 business day.")
     db.commit()

@@ -38,7 +38,6 @@ function AuthCard({ title, subtitle, children, footer }: { title: string; subtit
 
 export function LoginPage() {
   const { user, login, completeTwoFactor } = useAuth();
-  const nav = useNavigate();
   const loc = useLocation() as { state?: { from?: string } };
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -95,7 +94,6 @@ export function LoginPage() {
           </button>
         )}
       </form>
-      <button type="button" className="hidden" onClick={() => nav("/")} />
     </AuthCard>
   );
 }

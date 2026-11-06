@@ -164,3 +164,23 @@ def test_support_tickets(make_user, admin):
 def test_investments_disabled(client):
     r = client.get("/api/v1/investments/products")
     assert r.status_code == 503 and r.json()["error"]["code"] == "feature_disabled"
+
+
+def test_duplicate_ghana_card_is_flagged(make_user, admin):
+    body = {"tier_requested": 2, "id_type": "ghana_card", "id_number": "GHA-111222333-4", "first_name": "A",
+            "last_name": "B", "date_of_birth": "1990-01-01"}
+    first, second = make_user(kyc_tier=0), make_user(kyc_tier=0)
+    sub = first.post("/me/kyc", body).json()
+    admin.post(f"/admin/kyc/{sub['id']}/review", {"decision": "approve"})
+    r = second.post("/me/kyc", body)
+    assert r.status_code == 201 and r.json()["verification_result"]["duplicate_id_user"] == first.id
+    alerts = admin.get("/admin/fraud-alerts").json()["items"]
+    assert any(a["rule"] == "duplicate_identity" for a in alerts)
+
+
+def test_checkout_masks_customer_email(make_user, active_business):
+    owner, biz = active_business
+    pr = owner.post(f"/businesses/{biz['id']}/payment-requests",
+                    {"amount": "5", "customer_email": "kwame.mensah@example.com"}).json()
+    view = owner.client.get(f"/api/v1/checkout/{pr['reference']}").json()
+    assert view["customer_email"] == "kw***@example.com"

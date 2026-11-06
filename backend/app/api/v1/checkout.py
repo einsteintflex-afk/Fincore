@@ -17,6 +17,13 @@ from app.services.payments import PaymentService
 router = APIRouter(tags=["Checkout (public)"])
 
 
+def _mask_email(email: str | None) -> str | None:
+    if not email or "@" not in email:
+        return None
+    name, domain = email.split("@", 1)
+    return f"{name[:2]}***@{domain}"
+
+
 def public_view(db: Session, pr: PaymentRequest) -> dict:
     biz = db.get(Business, pr.business_id)
     link = db.get(PaymentLink, pr.payment_link_id) if pr.payment_link_id else None
@@ -24,7 +31,7 @@ def public_view(db: Session, pr: PaymentRequest) -> dict:
         "reference": pr.reference, "amount": pr.amount, "currency": pr.currency, "status": pr.status,
         "description": pr.description, "merchant_name": biz.trading_name or biz.name,
         "merchant_code": biz.merchant_code, "livemode": pr.environment == "live",
-        "customer_email": pr.customer_email, "channel": pr.channel, "failure_reason": pr.failure_reason,
+        "customer_email": _mask_email(pr.customer_email), "channel": pr.channel, "failure_reason": pr.failure_reason,
         "expires_at": pr.expires_at, "paid_at": pr.paid_at,
         "redirect_url": (link.redirect_url if link else None) or pr.callback_url,
     }

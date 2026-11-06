@@ -2,7 +2,7 @@ import { ArrowRight, Building2, CheckCircle2, Code2, Lock, ShieldCheck, Smartpho
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { SandboxBanner } from "@/components/Layout";
-import { Alert, Badge, Button, ErrorState, Input, Select, Spinner } from "@/components/ui";
+import { Alert, Badge, Button, ErrorState, Input, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { amountError, detectNetwork, money, NETWORKS } from "@/lib/format";
@@ -251,4 +251,3 @@ export function NotFoundPage() {
   );
 }
 
-export { Select };
