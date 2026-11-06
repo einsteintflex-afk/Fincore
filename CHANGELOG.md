@@ -11,6 +11,10 @@
 - Duplicate verified Ghana Card detection raises a high-severity alert; customer email masked on public checkout.
 - `frontend/e2e/smoke.cjs` (all-pages browser smoke test).
 
+### Security
+- Browser refresh tokens moved from localStorage to an HttpOnly, SameSite=Strict cookie scoped to the auth
+  endpoints, with a CSRF header requirement on cookie-based refresh. API clients keep body-based refresh.
+
 ## 0.1.0 — 2026-11-06 (session 1)
 
 ### Added

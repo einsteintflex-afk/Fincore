@@ -107,7 +107,7 @@ roles, rate limiting, append-only audit log, risk scoring and restrictions.
 ## 8. Frontend
 
 React 18 + TypeScript + Vite + Tailwind + TanStack Query. One SPA, four portals (code-split chunks),
-plus public checkout/payment-link pages. Access token kept in memory, refresh token in localStorage
+plus public checkout/payment-link pages. Access token kept in memory, refresh token in an HttpOnly cookie
 (see TECHNICAL_DECISIONS TD-011). All money is handled as decimal strings; display formatting only.
 
 ## 9. Future modules

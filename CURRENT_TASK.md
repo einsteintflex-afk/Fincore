@@ -4,22 +4,25 @@
 - [x] Backend foundation (ledger, wallets, payments, providers, developer, admin)
 - [x] Frontend (customer, merchant, developer, admin portals + checkout), browser-verified
 - [x] Documentation set, docker-compose, CI, load test
-- [x] Phase 3.1 Scheduled daily/weekly settlements (worker, idempotent per period)
-- [x] Phase 3.2 Maker-checker approvals for large adjustments/reversals (+ admin Approvals page)
-- [x] Phase 3.4 AML monitoring scenarios + CSV case export (+ admin buttons)
+- [x] Phase 3.1 Scheduled daily/weekly settlements
+- [x] Phase 3.2 Maker-checker approvals for large adjustments/reversals
+- [x] Phase 3.3 Refresh token in HttpOnly cookie + CSRF header (browser-verified)
+- [x] Phase 3.4 AML monitoring scenarios + CSV case export
 
 ## Next task (start here)
-**Phase 3.3 — move the refresh token to an HttpOnly cookie** (see TECHNICAL_DECISIONS TD-011).
+**Phase 3.5 — KYC document upload.**
 
 Acceptance criteria:
-- `/auth/login`, `/auth/login/2fa` and `/auth/refresh` set the refresh token in an `HttpOnly; Secure`
-  (Secure off in development) `SameSite=Strict` cookie scoped to `/api/v1/auth`, and stop returning it in
-  the JSON body for browser clients (keep body support behind a flag for non-browser clients if needed).
-- `/auth/refresh` reads the cookie; `/auth/logout` clears it.
-- CSRF: because the cookie is SameSite=Strict and only sent to `/api/v1/auth/*`, require a custom header
-  (e.g. `X-FinCore-CSRF: 1`) on `/auth/refresh` and reject requests without it.
-- Frontend `lib/api.ts` stops using localStorage for the refresh token; `credentials: "include"` on auth calls.
-- Update tests in `tests/test_auth.py` and `src/__tests__/api.test.ts`; re-run `frontend/e2e/journey.cjs`.
+- Storage abstraction `app/services/storage.py` with a local-filesystem backend (dev/test) and an
+  S3-compatible backend configured by env vars (bucket, region, endpoint, credentials) — no paid account
+  needed to develop; document the production settings.
+- `POST /me/kyc/documents` (multipart: `kind` = id_front | id_back | selfie | proof_of_address, file) →
+  validates type (JPEG/PNG/PDF by magic bytes) and size (≤ 5 MB), stores under a random key, returns a
+  document id. `KycIn.documents` references uploaded ids; tier ≥ 2 requires id_front + selfie.
+- Staff view documents through a short-lived signed URL (`GET /admin/kyc/{id}/documents/{doc}`), audit-logged.
+- Files are never served from a public path; client filenames are not trusted.
+- Frontend: upload controls on the Verification page; previews in the admin KYC review modal.
+- Tests for validation, ownership and staff access.
 
-Then continue with the remaining 🔜 items in DEVELOPMENT_ROADMAP.md Phase 3 (5, 6, 7, 8, 9, 10, plus
-maker-checker for fee/limit changes and goAML XML export).
+Then continue with Phase 3 items 6–10 in DEVELOPMENT_ROADMAP.md, plus maker-checker for fee/limit
+changes and goAML XML export.

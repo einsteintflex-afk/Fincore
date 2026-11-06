@@ -55,8 +55,8 @@ cd ../frontend && npm install && npm run dev   # http://localhost:5173 (proxies 
 ## Tests
 
 ```bash
-cd backend && ../.venv/bin/python -m pytest        # 108 tests, needs the fincore_test database
-cd frontend && npm test                            # 15 unit tests
+cd backend && ../.venv/bin/python -m pytest        # 110 tests, needs the fincore_test database
+cd frontend && npm test                            # 16 unit tests
 node frontend/e2e/journey.cjs <shots-dir> <recipient-acct> <link-slug>   # browser journey (Playwright)
 node frontend/e2e/smoke.cjs <shots-dir>                                   # every page, all portals
 python backend/scripts/loadtest.py --users 20 --transfers 400            # load test

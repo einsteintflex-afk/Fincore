@@ -7,7 +7,7 @@
 |---|---|
 | Password hashing | Argon2id (`argon2-cffi`), policy: ≥10 chars, upper, lower, digit |
 | Brute-force protection | 5 failed logins → 15 min lockout; strict per-IP rate limit on login/registration/reset; constant-time response for unknown emails |
-| Sessions | Access JWT (HS256, 15 min) carries a session id checked on every request → instant revocation; refresh tokens are opaque, SHA-256 hashed, rotated on every use, 14-day expiry |
+| Sessions | Access JWT (HS256, 15 min, in memory) carries a session id checked on every request → instant revocation; refresh tokens are opaque, SHA-256 hashed, rotated on every use, 14-day expiry, delivered to browsers as an HttpOnly SameSite=Strict cookie (CSRF header required) |
 | 2FA | TOTP (RFC 6238) with ±1 step window; seed encrypted at rest; challenge token (5 min) between password and code |
 | Password reset | Single-use opaque token, hashed, 30-minute expiry; all sessions revoked after reset/change |
 | Account restrictions | `no_debit`, `no_credit`, `full_freeze`, `login_block`; account status frozen/closed; enforced in services and auth dependency |
@@ -47,7 +47,7 @@
 | Threat | Mitigation | Residual / to do |
 |---|---|---|
 | Credential stuffing | lockout, rate limits, 2FA | add breached-password check, device fingerprinting, CAPTCHA after failures |
-| Session theft (XSS) | CSP, no third-party scripts, short access tokens, revocable sessions | move refresh token to HttpOnly cookie (TD-011) |
+| Session theft (XSS) | CSP, no third-party scripts, in-memory access tokens, HttpOnly SameSite=Strict refresh cookie + CSRF header, revocable sessions | — |
 | Double spend / race conditions | row locks, sorted lock order, CHECK constraints, idempotency | — (covered by concurrency test) |
 | Insider manipulation of balances | append-only ledger and audit log, adjustments require finance role and reason, maker-checker approval above thresholds | extend four-eyes to fee/limit changes |
 | Forged provider callbacks | signature verification / status re-query | IP allow-listing at the edge for MTN |

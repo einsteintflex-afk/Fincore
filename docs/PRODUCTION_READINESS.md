@@ -18,7 +18,7 @@ approval or production readiness. This is the gap list, grouped by who must act.
 ## Engineering backlog before go-live
 - [ ] Email/SMS delivery providers wired into the outbox worker (OTP via SMS, transaction receipts)
 - [x] Maker-checker approvals for adjustments and reversals above thresholds (fee/limit changes still single-approver)
-- [ ] Refresh token in HttpOnly SameSite cookie (TD-011)
+- [x] Refresh token in HttpOnly SameSite cookie (TD-011)
 - [x] AML transaction monitoring scenarios + CSV case export
 - [ ] Sanctions/PEP screening on onboarding; goAML XML STR export for FIC
 - [ ] KYC document upload to encrypted object storage with virus scanning

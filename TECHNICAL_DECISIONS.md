@@ -41,10 +41,11 @@ and deterministic 4xx outcomes are replayed.
 SHA-256 in constant time. Secret shown once. Webhook secrets and TOTP seeds are Fernet-encrypted with a
 key derived from `FINCORE_ENCRYPTION_KEY` (use KMS in production).
 
-**TD-011 Token storage in the SPA.** Access JWT (15 min) in memory; rotating refresh token in
-localStorage. Server-side sessions make every token revocable (logout, password change, admin freeze).
-Trade-off: localStorage is XSS-readable; mitigated by strict CSP in nginx and no third-party scripts.
-Moving refresh tokens to an HttpOnly SameSite cookie is on the roadmap.
+**TD-011 Token storage in the SPA (revised).** Access JWT (15 min) lives in memory only. Browser clients
+(`X-FinCore-Client: web`) receive the rotating refresh token as an `HttpOnly; SameSite=Strict` cookie scoped
+to `/api/v1/auth` (`Secure` in staging/production), so JavaScript can never read it; cookie-based refreshes
+also require the `X-FinCore-CSRF: 1` header. Non-browser clients still get the refresh token in the JSON body.
+localStorage holds only a non-secret "has session" flag. Server-side sessions keep every token revocable.
 
 **TD-012 Database-backed queues.** Webhook deliveries, email/SMS outbox and in-flight payouts are tables
 processed by the worker with `SKIP LOCKED`. Avoids running Redis/RabbitMQ before it's needed.

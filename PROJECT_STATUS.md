@@ -8,11 +8,11 @@ No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production 
 ## Verified state (re-run these to confirm)
 | Check | Command | Last result |
 |---|---|---|
-| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 108 passed |
+| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 110 passed |
 | Backend lint | `../.venv/bin/ruff check app tests` | clean |
 | Migrations match models | `../.venv/bin/alembic upgrade head && ../.venv/bin/alembic check` | no drift |
 | Frontend typecheck/build | `cd frontend && npm run build` | ok (initial JS ≈ 85 KB gz) |
-| Frontend tests | `npm test` | 15 passed |
+| Frontend tests | `npm test` | 16 passed |
 | Browser smoke (32 pages, 4 portals) | `node frontend/e2e/smoke.cjs <dir>` | 0 console/page errors |
 | Browser maker-checker flow | admin raises GHS 2,500 adjustment → second finance user approves | executed, ledger balanced |
 | Browser journey (register → deposit → send → limit → link checkout) | `node frontend/e2e/journey.cjs …` | all steps pass |
