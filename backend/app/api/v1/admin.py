@@ -15,7 +15,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -68,7 +68,7 @@ from app.schemas.common import (
     TransactionOut,
     UserOut,
 )
-from app.services import analytics, approvals, kyc, reconciliation
+from app.services import aml, analytics, approvals, kyc, reconciliation
 from app.services import business as bsvc
 from app.services.audit import audit
 from app.services.auth import revoke_all_sessions
@@ -395,6 +395,30 @@ def update_alert(alert_id: uuid.UUID, body: FraudAlertUpdateIn, staff: User = De
           target_id=a.id, details=body.model_dump())
     db.commit()
     return a
+
+
+@router.post("/aml/scan")
+def aml_scan(staff: User = Depends(compliance), db: Session = Depends(get_db)):
+    """Run the AML monitoring scenarios now (the worker also runs them every 15 minutes)."""
+    result = aml.run_scan(db)
+    audit(db, "aml.scan", actor_id=staff.id, actor_type="staff", details=result)
+    db.commit()
+    return {"alerts_raised": result}
+
+
+@router.get("/fraud-alerts/export", response_class=StreamingResponse)
+def export_alerts(start: date | None = None, end: date | None = None, status: str = "open,investigating",
+                  staff: User = Depends(compliance), db: Session = Depends(get_db)):
+    end = end or datetime.now(timezone.utc).date()
+    start = start or end - timedelta(days=30)
+    s = datetime.combine(start, time.min, tzinfo=timezone.utc)
+    e = datetime.combine(end + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    content = aml.export_alerts_csv(db, s, e, [x.strip() for x in status.split(",") if x.strip()])
+    audit(db, "aml.alerts_exported", actor_id=staff.id, actor_type="staff",
+          details={"start": start, "end": end, "status": status})
+    db.commit()
+    return StreamingResponse(iter([content]), media_type="text/csv",
+                             headers={"Content-Disposition": f'attachment; filename="fincore-alerts-{start}-{end}.csv"'})
 
 
 # ================================================================ fees & limits

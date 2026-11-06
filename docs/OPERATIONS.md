@@ -18,7 +18,7 @@
 ## Scheduled jobs
 | Job | How | Frequency |
 |---|---|---|
-| Worker loop (webhooks, polling, expiry, outbox) | `python -m app.cli worker` | continuous |
+| Worker loop (webhooks, polling, expiry, outbox, scheduled settlements, AML scan every 15 min) | `python -m app.cli worker` | continuous |
 | Ledger + provider reconciliation | `python -m app.cli reconcile` (exit 2 on imbalance) | hourly + end of day |
 | Database backup | managed snapshots + `docker compose --profile ops run --rm backup` for logical dumps | daily logical, continuous WAL/PITR |
 

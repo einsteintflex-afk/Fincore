@@ -17,12 +17,13 @@ approval or production readiness. This is the gap list, grouped by who must act.
 
 ## Engineering backlog before go-live
 - [ ] Email/SMS delivery providers wired into the outbox worker (OTP via SMS, transaction receipts)
-- [ ] Maker-checker approvals for adjustments, reversals and fee/limit changes above thresholds
+- [x] Maker-checker approvals for adjustments and reversals above thresholds (fee/limit changes still single-approver)
 - [ ] Refresh token in HttpOnly SameSite cookie (TD-011)
-- [ ] Sanctions/PEP screening on onboarding; AML transaction monitoring scenarios; STR export for FIC
+- [x] AML transaction monitoring scenarios + CSV case export
+- [ ] Sanctions/PEP screening on onboarding; goAML XML STR export for FIC
 - [ ] KYC document upload to encrypted object storage with virus scanning
 - [ ] Redis-backed rate limiter or edge limits for multi-instance deployments
-- [ ] Automatic settlements on schedule (daily/weekly) — settlement schedule is stored but only manual payouts run
+- [x] Automatic settlements on schedule (daily/weekly)
 - [ ] Statement PDF generation (CSV/JSON exist)
 - [ ] Provider settlement-file ingestion (upload UI) for reconciliation
 - [ ] Load testing at target volume on production-like infrastructure
@@ -32,4 +33,5 @@ approval or production readiness. This is the gap list, grouped by who must act.
 ## Already in place
 Double-entry immutable ledger with integrity checks; concurrency-safe postings; idempotency; tiered
 limits; risk alerts; RBAC; audit log; 2FA; encrypted secrets; signed webhooks; reconciliation; sandbox
-isolation; CI; Docker deployment; health/metrics endpoints; backup job; 94 backend + 15 frontend tests.
+isolation; CI; Docker deployment; health/metrics endpoints; backup job; scheduled settlements; maker-checker;
+AML scenarios; 108 backend + 15 frontend tests; browser smoke and journey scripts.

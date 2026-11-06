@@ -5984,6 +5984,9 @@
        }
       }
      },
+     "202": {
+      "description": "Queued for second approval"
+     },
      "422": {
       "description": "Validation Error",
       "content": {
@@ -6063,6 +6066,109 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/TransactionOut"
+        }
+       }
+      }
+     },
+     "202": {
+      "description": "Queued for second approval"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/approvals": {
+   "get": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "List Approvals",
+    "operationId": "list_approvals_api_v1_admin_approvals_get",
+    "parameters": [
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "pending",
+       "title": "Status"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ApprovalOut"
+         },
+         "title": "Response List Approvals Api V1 Admin Approvals Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/approvals/{approval_id}/review": {
+   "post": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Review Approval",
+    "operationId": "review_approval_api_v1_admin_approvals__approval_id__review_post",
+    "parameters": [
+     {
+      "name": "approval_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Approval Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReviewIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApprovalOut"
         }
        }
       }
@@ -6206,6 +6312,96 @@
         }
        }
       }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/aml/scan": {
+   "post": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Aml Scan",
+    "description": "Run the AML monitoring scenarios now (the worker also runs them every 15 minutes).",
+    "operationId": "aml_scan_api_v1_admin_aml_scan_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/fraud-alerts/export": {
+   "get": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Export Alerts",
+    "operationId": "export_alerts_api_v1_admin_fraud_alerts_export_get",
+    "parameters": [
+     {
+      "name": "start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start"
+      }
+     },
+     {
+      "name": "end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End"
+      }
+     },
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "open,investigating",
+       "title": "Status"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
      },
      "422": {
       "description": "Validation Error",
@@ -7181,6 +7377,107 @@
      "created_at"
     ],
     "title": "AppOut"
+   },
+   "ApprovalOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "action": {
+      "type": "string",
+      "title": "Action"
+     },
+     "payload": {
+      "type": "object",
+      "title": "Payload"
+     },
+     "amount": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Amount"
+     },
+     "reason": {
+      "type": "string",
+      "title": "Reason"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "requested_by_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Requested By Id"
+     },
+     "reviewed_by_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reviewed By Id"
+     },
+     "review_note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Review Note"
+     },
+     "reviewed_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reviewed At"
+     },
+     "result": {
+      "type": "object",
+      "title": "Result"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "action",
+     "payload",
+     "amount",
+     "reason",
+     "status",
+     "requested_by_id",
+     "reviewed_by_id",
+     "review_note",
+     "reviewed_at",
+     "result",
+     "created_at"
+    ],
+    "title": "ApprovalOut"
    },
    "AuditOut": {
     "properties": {

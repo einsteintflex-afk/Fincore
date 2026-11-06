@@ -22,7 +22,7 @@ import {
   Tabs,
   Textarea,
 } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, downloadFile } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { dateOnly, dateTime, money, titleCase } from "@/lib/format";
 import { useAction, useGet } from "@/lib/hooks";
@@ -408,9 +408,20 @@ export function AdminFraud() {
   const [sel, setSel] = useState<any>(null);
   const [form, setForm] = useState({ status: "investigating", notes: "", restrict_user: false });
   const upd = useAction(() => api(`/admin/fraud-alerts/${sel.id}`, { method: "PATCH", body: form }), { invalidate: [["fraud"]], success: "Alert updated", onSuccess: () => setSel(null) });
+  const scanNow = useAction(() => api("/admin/aml/scan", { method: "POST" }), {
+    invalidate: [["fraud"]],
+    success: (r: any) => {
+      const n = Object.values(r.alerts_raised as Record<string, number>).reduce((a, b) => a + b, 0);
+      return n ? `AML scan raised ${n} new alert(s)` : "AML scan complete — no new alerts";
+    },
+  });
   return (
     <>
-      <PageHeader title="Fraud investigation" />
+      <PageHeader title="Fraud & AML investigation" subtitle="Real-time risk rules plus AML scenarios (structuring, rapid movement, fan-in, dormant reactivation)."
+        actions={<>
+          <Button variant="secondary" loading={scanNow.isPending} onClick={() => scanNow.mutate(undefined)}>Run AML scan</Button>
+          <Button variant="secondary" onClick={() => downloadFile("/admin/fraud-alerts/export", { status: "open,investigating,resolved" }, "fincore-alerts.csv")}>Export CSV</Button>
+        </>} />
       <Card>
         <Tabs value={status} onChange={setStatus} tabs={["open", "investigating", "resolved", "false_positive"].map((s) => ({ value: s, label: titleCase(s) }))} />
         {q.isLoading ? <Spinner /> : !q.data?.items.length ? <Empty title="No alerts" /> : (

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 — 2026-11-06 (session 1, continued)
+
+### Added
+- Scheduled daily/weekly merchant settlements in the worker (once per period, system-attributed, retry-safe).
+- Maker-checker approvals: adjustments ≥ GHS 1,000 and reversals ≥ GHS 5,000 (configurable
+  `approval_thresholds` setting) require a different finance/admin user; admin Approvals page.
+- AML monitoring scenarios (structuring, rapid movement, fan-in, dormant reactivation) run every 15 minutes
+  by the worker or on demand; CSV case export for compliance; admin buttons.
+- Duplicate verified Ghana Card detection raises a high-severity alert; customer email masked on public checkout.
+- `frontend/e2e/smoke.cjs` (all-pages browser smoke test).
+
 ## 0.1.0 — 2026-11-06 (session 1)
 
 ### Added

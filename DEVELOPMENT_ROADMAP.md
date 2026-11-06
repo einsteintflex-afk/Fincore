@@ -20,10 +20,10 @@ Legend: ✅ done · 🔜 next · ⏳ blocked on owner/external · 📐 designed
 - ✅ Documentation set
 
 ## Phase 3 — Hardening (engineering, no external dependency) 🔜
-1. 🔜 Scheduled automatic settlements (daily/weekly) in the worker
-2. 🔜 Maker-checker approvals for adjustments/reversals/fee changes above thresholds
+1. ✅ Scheduled automatic settlements (daily/weekly) in the worker
+2. ✅ Maker-checker approvals for adjustments/reversals above thresholds (fee/limit changes: 🔜)
 3. 🔜 Refresh token → HttpOnly cookie; CSRF protection for cookie flow
-4. 🔜 AML monitoring scenarios (structuring, rapid in/out, dormant reactivation) + STR export
+4. ✅ AML monitoring scenarios (structuring, rapid in/out, fan-in, dormant reactivation) + CSV case export (goAML XML: 🔜)
 5. 🔜 KYC document upload (S3-compatible storage abstraction, local dev backend)
 6. 🔜 PDF statements and receipts
 7. 🔜 Provider settlement-file upload for reconciliation (CSV) in admin UI

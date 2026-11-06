@@ -24,7 +24,7 @@ from app.models.enums import BusinessStatus, PaymentStatus, TxnStatus
 from app.models.ledger import IdempotencyRecord
 from app.models.transaction import Transaction
 from app.models.user import OutboundMessage
-from app.services import webhooks
+from app.services import aml, webhooks
 from app.services.payments import PaymentService
 from app.services.transactions import TransactionService
 
@@ -127,11 +127,25 @@ def run_scheduled_settlements(now: datetime | None = None) -> dict:
     return stats
 
 
+AML_INTERVAL = timedelta(minutes=15)
+_last_aml: datetime | None = None
+
+
+def maybe_run_aml() -> dict | None:
+    global _last_aml
+    now = utcnow()
+    if _last_aml and now - _last_aml < AML_INTERVAL:
+        return None
+    _last_aml = now
+    with SessionLocal() as db:
+        return aml.run_scan(db, now)
+
+
 def tick(client: httpx.Client) -> dict:
     with SessionLocal() as db:
         hooks = webhooks.deliver_due(db, client)
     return {"webhooks": hooks, "polled": poll_in_flight(), "expired": expire_checkouts(), "outbox": drain_outbox(),
-            "settlements": run_scheduled_settlements()}
+            "settlements": run_scheduled_settlements(), "aml": maybe_run_aml()}
 
 
 def run_forever(interval: float = 5.0, once: bool = False) -> None:
@@ -148,8 +162,8 @@ def run_forever(interval: float = 5.0, once: bool = False) -> None:
         while _running:
             try:
                 stats = tick(client)
-                if any(v for v in stats.values() if not isinstance(v, dict)) or stats["webhooks"]["attempted"] \
-                        or stats["settlements"]["settled"]:
+                if any(v for v in stats.values() if isinstance(v, int)) or stats["webhooks"]["attempted"] \
+                        or stats["settlements"]["settled"] or any((stats["aml"] or {}).values()):
                     log.info("worker tick", extra=stats)
             except Exception:
                 log.exception("worker tick failed")

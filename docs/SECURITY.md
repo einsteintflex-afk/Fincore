@@ -49,11 +49,11 @@
 | Credential stuffing | lockout, rate limits, 2FA | add breached-password check, device fingerprinting, CAPTCHA after failures |
 | Session theft (XSS) | CSP, no third-party scripts, short access tokens, revocable sessions | move refresh token to HttpOnly cookie (TD-011) |
 | Double spend / race conditions | row locks, sorted lock order, CHECK constraints, idempotency | — (covered by concurrency test) |
-| Insider manipulation of balances | append-only ledger and audit log, adjustments require finance role and reason | add maker-checker (four-eyes) approval for adjustments/reversals above a threshold |
+| Insider manipulation of balances | append-only ledger and audit log, adjustments require finance role and reason, maker-checker approval above thresholds | extend four-eyes to fee/limit changes |
 | Forged provider callbacks | signature verification / status re-query | IP allow-listing at the edge for MTN |
 | Webhook SSRF | HTTPS + public host check in production | resolve DNS and block private ranges at send time |
 | API key leakage | hashed storage, rolling, revocation, usage logs | IP allow-lists per key, key scopes |
-| Money laundering / mule accounts | KYC tiers, limits, risk alerts, duplicate-ID alerts | sanctions/PEP screening, transaction monitoring rules per BoG AML/CFT guidance, STR workflow to FIC |
+| Money laundering / mule accounts | KYC tiers, limits, real-time risk alerts, AML scenarios (structuring, rapid movement, fan-in, dormant reactivation), duplicate-ID alerts, CSV case export | sanctions/PEP screening, goAML XML STR filing to FIC, scenario tuning by compliance |
 
 ## Production security checklist
 - [ ] Secrets from a secrets manager (not env files); rotate `SECRET_KEY`/`ENCRYPTION_KEY` with a key-versioning plan
