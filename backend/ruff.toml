@@ -1,0 +1,10 @@
+line-length = 120
+target-version = "py312"
+exclude = ["alembic/versions"]
+
+[lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101", "S105", "S106", "B008", "B904", "S311", "UP017", "UP038", "E501"]
+
+[lint.per-file-ignores]
+"tests/*" = ["S", "E501", "B"]

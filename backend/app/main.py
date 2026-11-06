@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging
 from app.core.middleware import RateLimitMiddleware, RequestContextMiddleware
+from app.core.money import to_api_str
 
 log = logging.getLogger("fincore")
 
@@ -37,7 +38,17 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _install_decimal_encoder() -> None:
+    """Plain-dict responses go through FastAPI's jsonable_encoder, which would turn Decimal into float."""
+    from decimal import Decimal
+
+    from fastapi import encoders
+
+    encoders.ENCODERS_BY_TYPE[Decimal] = to_api_str
+
+
 def create_app() -> FastAPI:
+    _install_decimal_encoder()
     if settings.environment != "test":
         configure_logging("DEBUG" if settings.debug else "INFO")
     app = FastAPI(title="FinCore API", version="0.1.0", description=DESCRIPTION, lifespan=lifespan,

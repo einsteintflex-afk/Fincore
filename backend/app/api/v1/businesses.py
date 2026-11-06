@@ -38,7 +38,8 @@ from app.schemas.common import (
     TransactionOut,
     WalletOut,
 )
-from app.services import analytics, business as bsvc
+from app.services import analytics
+from app.services import business as bsvc
 from app.services.payments import PaymentService
 from app.services.reconciliation import settlement_report
 from app.services.wallets import business_wallets

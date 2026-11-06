@@ -61,3 +61,16 @@ def validate_amount(value: object, currency: str, *, allow_zero: bool = False) -
 
 def fmt(value: Decimal, currency: str) -> str:
     return f"{currency} {round_money(value, currency):,}"
+
+
+_CENT = Decimal("0.01")
+
+
+def to_api_str(value: Decimal) -> str:
+    """Serialise money for the API: always a string, trimmed to 2 dp when no precision is lost."""
+    if not value.is_finite():
+        return str(value)
+    q = value.quantize(_CENT)
+    if q == value:
+        return f"{q:f}"
+    return f"{value.normalize():f}"

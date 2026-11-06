@@ -26,7 +26,7 @@ from app.models.ledger import Wallet
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.providers import route
-from app.providers.base import CollectionRequest, DisbursementRequest
+from app.providers.base import CollectionRequest
 from app.services import fees, limits, risk, webhooks
 from app.services.audit import audit
 from app.services.ghana import NETWORK_NAMES, detect_network, normalize_msisdn

@@ -95,7 +95,7 @@ def _validate_url(url: str) -> str:
     if settings.is_production and parsed.scheme != "https":
         raise ValidationFailed("Webhook URLs must use HTTPS")
     host = (parsed.hostname or "").lower()
-    if settings.is_production and (host in ("localhost", "127.0.0.1", "0.0.0.0") or host.endswith(".internal")):
+    if settings.is_production and (host in ("localhost", "127.0.0.1", "0.0.0.0") or host.endswith(".internal")):  # noqa: S104 (blocklist, not a bind)
         raise ValidationFailed("Webhook URL must be publicly reachable")
     return url
 

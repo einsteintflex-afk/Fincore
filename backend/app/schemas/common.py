@@ -5,9 +5,14 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, PlainSerializer
 
 T = TypeVar("T")
+
+from app.core.money import to_api_str  # noqa: E402
+
+# Output type for money: always a string such as "125.50".
+Dec = Annotated[Decimal, PlainSerializer(to_api_str, return_type=str, when_used="json")]
 
 # Money crosses the API as a string-encoded decimal ("125.50"). Floats are accepted on input but
 # converted via their string repr, and precision is validated per currency in the service layer.
@@ -161,7 +166,7 @@ class WalletOut(BaseModel):
     label: str
     is_default: bool
     status: str
-    balance: Decimal
+    balance: Dec
     created_at: datetime
 
 
@@ -201,8 +206,8 @@ class TransactionOut(ORM):
     type: str
     status: str
     channel: str
-    amount: Decimal
-    fee: Decimal
+    amount: Dec
+    fee: Dec
     currency: str
     source_wallet_id: uuid.UUID | None
     destination_wallet_id: uuid.UUID | None
@@ -341,10 +346,10 @@ class PaymentRequestOut(ORM):
     merchant_reference: str | None
     business_id: uuid.UUID
     environment: str
-    amount: Decimal
+    amount: Dec
     currency: str
-    fee: Decimal
-    amount_refunded: Decimal
+    fee: Dec
+    amount_refunded: Dec
     status: str
     description: str | None
     customer_name: str | None
@@ -356,7 +361,7 @@ class PaymentRequestOut(ORM):
     provider_reference: str | None
     failure_reason: str | None
     payment_link_id: uuid.UUID | None
-    meta: dict = Field(serialization_alias="metadata")
+    meta: dict = Field(validation_alias=AliasChoices("meta", "metadata"), serialization_alias="metadata")
     expires_at: datetime | None
     paid_at: datetime | None
     created_at: datetime
@@ -384,7 +389,7 @@ class PaymentLinkOut(ORM):
     slug: str
     title: str
     description: str | None
-    amount: Decimal | None
+    amount: Dec | None
     currency: str
     active: bool
     single_use: bool
@@ -403,7 +408,7 @@ class RefundOut(ORM):
     id: uuid.UUID
     reference: str
     payment_request_id: uuid.UUID
-    amount: Decimal
+    amount: Dec
     currency: str
     reason: str | None
     status: str
@@ -417,8 +422,8 @@ class SettlementIn(BaseModel):
 class SettlementOut(ORM):
     id: uuid.UUID
     reference: str
-    amount: Decimal
-    fee: Decimal
+    amount: Dec
+    fee: Dec
     currency: str
     status: str
     destination: dict
@@ -551,7 +556,7 @@ class FeeRuleIn(BaseModel):
     currency: str = "GHS"
     payer: str = Field(default="customer", pattern="^(customer|merchant)$")
     flat_fee: Money = Decimal("0")
-    percent_fee: Decimal = Field(default=Decimal("0"), ge=0, le=Decimal("0.2"))
+    percent_fee: Dec = Field(default=Decimal("0"), ge=0, le=Decimal("0.2"))
     min_fee: Money = Decimal("0")
     max_fee: Money | None = None
     active: bool = True
@@ -564,10 +569,10 @@ class FeeRuleOut(ORM):
     channel: str | None
     currency: str
     payer: str
-    flat_fee: Decimal
-    percent_fee: Decimal
-    min_fee: Decimal
-    max_fee: Decimal | None
+    flat_fee: Dec
+    percent_fee: Dec
+    min_fee: Dec
+    max_fee: Dec | None
     active: bool
     updated_at: datetime
 
@@ -588,10 +593,10 @@ class LimitRuleOut(ORM):
     kyc_tier: int
     transaction_type: str
     currency: str
-    per_transaction_max: Decimal | None
-    daily_max: Decimal | None
-    monthly_max: Decimal | None
-    max_balance: Decimal | None
+    per_transaction_max: Dec | None
+    daily_max: Dec | None
+    monthly_max: Dec | None
+    max_balance: Dec | None
     active: bool
 
 
