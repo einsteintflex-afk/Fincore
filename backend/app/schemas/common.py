@@ -53,7 +53,7 @@ class TwoFactorLoginIn(BaseModel):
 
 
 class RefreshIn(BaseModel):
-    refresh_token: str
+    refresh_token: str | None = None  # omitted by browser clients, which use the HttpOnly cookie
 
 
 class TokenOut(BaseModel):

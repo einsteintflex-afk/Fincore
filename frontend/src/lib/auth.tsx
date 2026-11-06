@@ -36,18 +36,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     tokens.onAuthLost(() => {
-      tokens.set(null, null);
+      tokens.set(null);
       setUser(null);
     });
     (async () => {
-      if (tokens.refreshToken() && (await tokens.bootstrap())) await reload();
+      if (tokens.hasSession() && (await tokens.bootstrap())) await reload();
       setLoading(false);
     })();
   }, [reload]);
 
   const finish = useCallback(
-    async (data: { access_token: string; refresh_token: string }) => {
-      tokens.set(data.access_token, data.refresh_token);
+    async (data: { access_token: string }) => {
+      tokens.set(data.access_token);
       await reload();
     },
     [reload],
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           /* already signed out */
         }
-        tokens.set(null, null);
+        tokens.set(null);
         qc.clear();
         setUser(null);
       },

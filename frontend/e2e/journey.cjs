@@ -12,7 +12,7 @@ const { chromium } = require('playwright');
     await page.goto('http://localhost:5173/register');
     await page.getByLabel('Full name').fill('Yaw Darko');
     await page.getByLabel('Email').fill(email);
-    await page.getByLabel('Mobile number').fill('0244556677');
+    await page.getByLabel('Mobile number').fill('024' + String(Date.now()).slice(-7)); // unique per run
     await page.getByLabel('Password').fill('Str0ngPass!word');
     await page.getByRole('button', { name: 'Create account' }).click();
     await page.getByText('Hello, Yaw').waitFor({ timeout: 8000 });

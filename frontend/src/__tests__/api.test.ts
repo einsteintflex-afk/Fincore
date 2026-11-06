@@ -12,20 +12,29 @@ describe("api client", () => {
     await expect(api("/transfers", { body: {} })).rejects.toMatchObject({ status: 422, code: "insufficient_funds", message: "Insufficient funds" });
   });
 
-  it("refreshes the access token once on 401 and retries", async () => {
-    localStorage.setItem("fincore.refresh", "rt_old");
-    tokens.set("expired");
-    const calls: string[] = [];
+  it("refreshes via the HttpOnly cookie once on 401 and retries", async () => {
+    tokens.set("expired"); // also marks that a session exists
+    const calls: { url: string; init?: RequestInit }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
       const url = String(input);
-      calls.push(`${url} ${(init?.headers as Record<string, string>)?.Authorization ?? ""}`);
-      if (url.endsWith("/auth/refresh")) return respond(200, { access_token: "fresh", refresh_token: "rt_new" });
+      calls.push({ url, init });
+      if (url.endsWith("/auth/refresh")) return respond(200, { access_token: "fresh", refresh_token: null });
       if ((init?.headers as Record<string, string>)?.Authorization === "Bearer fresh") return respond(200, { ok: true });
       return respond(401, { error: { code: "token_expired", message: "Token expired" } });
     });
     await expect(api("/me")).resolves.toEqual({ ok: true });
-    expect(calls.some((c) => c.includes("/auth/refresh"))).toBe(true);
-    expect(localStorage.getItem("fincore.refresh")).toBe("rt_new");
+    const refresh = calls.find((c) => c.url.endsWith("/auth/refresh"))!;
+    expect(refresh.init?.credentials).toBe("include");
+    expect((refresh.init?.headers as Record<string, string>)["X-FinCore-CSRF"]).toBe("1");
+    expect(refresh.init?.body).toBeUndefined(); // token is never handled by JavaScript
+    expect(Object.keys(localStorage)).not.toContain("fincore.refresh");
+  });
+
+  it("does not attempt a refresh for anonymous visitors", async () => {
+    tokens.set(null);
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(() => respond(401, { error: { code: "unauthorized", message: "no" } }));
+    await expect(api("/me")).rejects.toMatchObject({ status: 401 });
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it("sends idempotency keys", async () => {

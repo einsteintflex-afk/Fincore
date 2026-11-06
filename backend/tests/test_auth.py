@@ -124,3 +124,28 @@ def test_protected_routes_require_auth(client):
 def test_customer_cannot_access_admin(make_user):
     u = make_user()
     assert u.get("/admin/overview").status_code == 403
+
+
+def test_web_clients_get_httponly_refresh_cookie(client):
+    register(client)
+    web = {"X-FinCore-Client": "web"}
+    r = client.post(f"{API}/auth/login", json={"email": "ama@example.com", "password": PASSWORD}, headers=web)
+    assert r.status_code == 200 and r.json()["refresh_token"] is None
+    set_cookie = r.headers["set-cookie"]
+    assert "fincore_rt=" in set_cookie and "HttpOnly" in set_cookie and "SameSite=strict" in set_cookie
+    assert "Path=/api/v1/auth" in set_cookie
+    # cookie-based refresh requires the CSRF header
+    assert client.post(f"{API}/auth/refresh").status_code == 403
+    r2 = client.post(f"{API}/auth/refresh", headers={"X-FinCore-CSRF": "1"})
+    assert r2.status_code == 200 and r2.json()["access_token"] and r2.json()["refresh_token"] is None
+    assert client.cookies.get("fincore_rt") not in (None, "")
+    h = {"Authorization": f"Bearer {r2.json()['access_token']}"}
+    assert client.post(f"{API}/auth/logout", headers=h).status_code == 200
+    assert client.post(f"{API}/auth/refresh", headers={"X-FinCore-CSRF": "1"}).status_code == 401
+
+
+def test_body_refresh_still_works_for_api_clients(client):
+    register(client)
+    tokens = login(client).json()
+    assert tokens["refresh_token"].startswith("rt_")
+    assert client.post(f"{API}/auth/refresh", json={"refresh_token": tokens["refresh_token"]}).status_code == 200

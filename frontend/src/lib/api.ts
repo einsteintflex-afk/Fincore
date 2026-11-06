@@ -5,7 +5,9 @@
  */
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api/v1";
-const REFRESH_KEY = "fincore.refresh";
+// The refresh token lives in an HttpOnly cookie set by the API (never readable from JavaScript).
+// We only remember *whether* a session exists, to avoid a pointless refresh call for anonymous visitors.
+const SESSION_FLAG = "fincore.session";
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown) {
@@ -17,50 +19,53 @@ let accessToken: string | null = null;
 let refreshing: Promise<boolean> | null = null;
 let onAuthLost: (() => void) | null = null;
 
+function setFlag(on: boolean) {
+  try {
+    if (on) localStorage.setItem(SESSION_FLAG, "1");
+    else localStorage.removeItem(SESSION_FLAG);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export const tokens = {
-  set(access: string | null, refresh?: string | null) {
+  /** Store the access token in memory; `null` signs out locally. */
+  set(access: string | null) {
     accessToken = access;
-    if (refresh !== undefined) {
-      try {
-        if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
-        else localStorage.removeItem(REFRESH_KEY);
-      } catch {
-        /* storage unavailable */
-      }
-    }
+    setFlag(access !== null);
   },
-  refreshToken(): string | null {
+  hasSession(): boolean {
     try {
-      return localStorage.getItem(REFRESH_KEY);
+      return localStorage.getItem(SESSION_FLAG) === "1";
     } catch {
-      return null;
+      return false;
     }
   },
   hasAccess: () => accessToken !== null,
-  /** On page load: exchange a stored refresh token for an access token. */
+  /** On page load: exchange the refresh cookie for an access token. */
   bootstrap: () => tryRefresh(),
   onAuthLost(fn: () => void) {
     onAuthLost = fn;
   },
 };
 
+const WEB_HEADERS = { "X-FinCore-Client": "web" };
+
 async function tryRefresh(): Promise<boolean> {
-  const rt = tokens.refreshToken();
-  if (!rt) return false;
   if (!refreshing) {
     refreshing = (async () => {
       try {
         const res = await fetch(`${BASE}/auth/refresh`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: rt }),
+          credentials: "include",
+          headers: { ...WEB_HEADERS, "X-FinCore-CSRF": "1" },
         });
         if (!res.ok) {
-          tokens.set(null, null);
+          tokens.set(null);
           return false;
         }
         const data = await res.json();
-        tokens.set(data.access_token, data.refresh_token);
+        tokens.set(data.access_token);
         return true;
       } catch {
         return false;
@@ -85,7 +90,7 @@ export async function api<T = any>(path: string, opts: RequestOptions = {}, retr
   Object.entries(opts.query ?? {}).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
   });
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...WEB_HEADERS };
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
@@ -94,6 +99,7 @@ export async function api<T = any>(path: string, opts: RequestOptions = {}, retr
   try {
     res = await fetch(url.toString().replace(window.location.origin, ""), {
       method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
+      credentials: "include",
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
@@ -101,7 +107,7 @@ export async function api<T = any>(path: string, opts: RequestOptions = {}, retr
     throw new ApiError(0, "network_error", "Can't reach FinCore. Check your connection and try again.");
   }
 
-  if (res.status === 401 && retry && !path.startsWith("/auth/login")) {
+  if (res.status === 401 && retry && !path.startsWith("/auth/login") && tokens.hasSession()) {
     if (await tryRefresh()) return api<T>(path, opts, false);
     onAuthLost?.();
   }
