@@ -1516,7 +1516,7 @@
       "required": false,
       "schema": {
        "type": "string",
-       "pattern": "^(json|csv)$",
+       "pattern": "^(json|csv|pdf)$",
        "default": "json",
        "title": "Format"
       }
@@ -1913,6 +1913,41 @@
         }
        }
       }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/transactions/{ref}/receipt.pdf": {
+   "get": {
+    "tags": [
+     "Wallets & transactions"
+    ],
+    "summary": "Transaction Receipt",
+    "operationId": "transaction_receipt_api_v1_transactions__ref__receipt_pdf_get",
+    "parameters": [
+     {
+      "name": "ref",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ref"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
      },
      "422": {
       "description": "Validation Error",
@@ -3081,6 +3116,51 @@
         }
        }
       }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/businesses/{business_id}/payment-requests/{reference}/receipt.pdf": {
+   "get": {
+    "tags": [
+     "Businesses & merchants"
+    ],
+    "summary": "Payment Receipt",
+    "operationId": "payment_receipt_api_v1_businesses__business_id__payment_requests__reference__receipt_pdf_get",
+    "parameters": [
+     {
+      "name": "business_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Business Id"
+      }
+     },
+     {
+      "name": "reference",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Reference"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
      },
      "422": {
       "description": "Validation Error",
@@ -4775,6 +4855,42 @@
         "schema": {}
        }
       }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/checkout/{reference}/receipt.pdf": {
+   "get": {
+    "tags": [
+     "Checkout (public)"
+    ],
+    "summary": "Checkout Receipt",
+    "description": "Customer receipt for a completed checkout (customer details masked: the link may be shared).",
+    "operationId": "checkout_receipt_api_v1_checkout__reference__receipt_pdf_get",
+    "parameters": [
+     {
+      "name": "reference",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Reference"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
      },
      "422": {
       "description": "Validation Error",

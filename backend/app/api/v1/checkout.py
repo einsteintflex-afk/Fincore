@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_user, money_movement_allowed
+from app.api.v1.wallets import pdf_response
 from app.core.database import get_db
 from app.core.errors import NotFound
 from app.models.business import Business, PaymentLink, PaymentRequest
 from app.models.user import User
 from app.schemas.common import CheckoutPayMomoIn, CheckoutPayWalletIn, LinkPayIn
+from app.services import pdf
 from app.services.payments import PaymentService
 
 router = APIRouter(tags=["Checkout (public)"])
@@ -40,6 +43,17 @@ def public_view(db: Session, pr: PaymentRequest) -> dict:
 @router.get("/checkout/{reference}")
 def get_checkout(reference: str, db: Session = Depends(get_db)):
     return public_view(db, PaymentService(db).get_request(reference))
+
+
+@router.get("/checkout/{reference}/receipt.pdf", response_class=Response)
+def checkout_receipt(reference: str, db: Session = Depends(get_db)):
+    """Customer receipt for a completed checkout (customer details masked: the link may be shared)."""
+    pr = PaymentService(db).get_request(reference)
+    if pr.status not in ("successful", "refunded", "partially_refunded"):
+        raise NotFound("A receipt is available once the payment succeeds")
+    biz = db.get(Business, pr.business_id)
+    return pdf_response(pdf.payment_receipt(pr, biz.trading_name or biz.name, biz.merchant_code, mask_customer=True),
+                        f"receipt-{pr.reference}.pdf")
 
 
 @router.post("/checkout/{reference}/mobile-money", dependencies=[Depends(money_movement_allowed)])

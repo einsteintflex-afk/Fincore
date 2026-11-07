@@ -25,7 +25,7 @@ approval or production readiness. This is the gap list, grouped by who must act.
 - [ ] Malware scanning of uploaded documents (e.g. ClamAV sidecar) before reviewer access
 - [ ] Redis-backed rate limiter or edge limits for multi-instance deployments
 - [x] Automatic settlements on schedule (daily/weekly)
-- [ ] Statement PDF generation (CSV/JSON exist)
+- [x] PDF statements and receipts
 - [ ] Provider settlement-file ingestion (upload UI) for reconciliation
 - [ ] Load testing at target volume on production-like infrastructure
 - [ ] Observability stack (Prometheus/Grafana dashboards, alert rules, Sentry)

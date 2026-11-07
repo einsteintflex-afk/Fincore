@@ -93,6 +93,10 @@ export function TransactionDetail({ t, onClose }: { t: Transaction | null; onClo
           )}
         </div>
       )}
+      <Button variant="secondary" className="mt-4 w-full" icon={<Download className="h-4 w-4" />}
+        onClick={() => downloadFile(`/transactions/${t.reference}/receipt.pdf`, undefined, `fincore-receipt-${t.reference}.pdf`)}>
+        Download receipt
+      </Button>
       <p className="mt-4 text-center text-xs text-slate-500">
         Problem with this transaction? <Link className="text-brand-700" to={`/app/support?ref=${t.reference}`}>Contact support</Link>
       </p>
@@ -556,7 +560,10 @@ export function StatementsPage() {
   return (
     <>
       <PageHeader title="Statements" subtitle="Ledger-backed statements with opening and closing balances."
-        actions={<Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => downloadFile(`/wallets/${walletId}/statement`, { ...range, format: "csv" }, `fincore-statement-${range.start}-${range.end}.csv`)}>Download CSV</Button>} />
+        actions={<>
+          <Button icon={<Download className="h-4 w-4" />} onClick={() => downloadFile(`/wallets/${walletId}/statement`, { ...range, format: "pdf" }, `fincore-statement-${range.start}-${range.end}.pdf`)}>Download PDF</Button>
+          <Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => downloadFile(`/wallets/${walletId}/statement`, { ...range, format: "csv" }, `fincore-statement-${range.start}-${range.end}.csv`)}>CSV</Button>
+        </>} />
       <Card>
         <div className="mb-4 grid gap-3 sm:grid-cols-3">
           {wallets.length > 1 ? <WalletSelect wallets={wallets} value={walletId} onChange={setWalletId} /> : null}

@@ -142,7 +142,12 @@ export function CheckoutPage() {
             <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
             <p className="mt-3 text-lg font-semibold">Payment successful</p>
             <p className="text-sm text-slate-500">You can close this page.</p>
-            {data.redirect_url && <a href={data.redirect_url}><Button className="mt-4">Return to merchant</Button></a>}
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <a href={`${import.meta.env.VITE_API_URL ?? "/api/v1"}/checkout/${data.reference}/receipt.pdf`} download>
+                <Button variant="secondary">Download receipt</Button>
+              </a>
+              {data.redirect_url && <a href={data.redirect_url}><Button>Return to merchant</Button></a>}
+            </div>
           </div>
         ) : data.status === "processing" ? (
           <div className="text-center">

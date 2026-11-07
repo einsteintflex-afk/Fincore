@@ -6,11 +6,12 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IdempotencyKey, current_user, money_movement_allowed, run_idempotent
-from app.api.v1.wallets import txn_out, wallet_out
+from app.api.v1.wallets import pdf_response, txn_out, wallet_out
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import NotFound
@@ -38,7 +39,7 @@ from app.schemas.common import (
     TransactionOut,
     WalletOut,
 )
-from app.services import analytics
+from app.services import analytics, pdf
 from app.services import business as bsvc
 from app.services.payments import PaymentService
 from app.services.reconciliation import settlement_report
@@ -230,6 +231,15 @@ def get_payment_request(business_id: uuid.UUID, reference: str, user: User = Dep
                         db: Session = Depends(get_db)):
     bsvc.require_permission(db, user, business_id, "payments:view")
     return pr_out(_pr(db, business_id, reference))
+
+
+@router.get("/{business_id}/payment-requests/{reference}/receipt.pdf", response_class=Response)
+def payment_receipt(business_id: uuid.UUID, reference: str, user: User = Depends(current_user),
+                    db: Session = Depends(get_db)):
+    b = bsvc.require_permission(db, user, business_id, "payments:view")
+    pr = _pr(db, business_id, reference)
+    return pdf_response(pdf.payment_receipt(pr, b.trading_name or b.name, b.merchant_code, mask_customer=False),
+                        f"fincore-payment-{pr.reference}.pdf")
 
 
 @router.post("/{business_id}/payment-requests/{reference}/cancel", response_model=PaymentRequestOut)

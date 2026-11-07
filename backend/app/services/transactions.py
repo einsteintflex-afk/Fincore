@@ -308,7 +308,8 @@ class TransactionService:
             channel=Channel.WALLET, amount=amount, fee=fee, currency=src.currency, source_wallet_id=src.id,
             destination_wallet_id=dst.id, initiated_by_id=user.id, provider="internal", provider_mode="internal",
             counterparty={"account_number": dst.account_number, "name": recipient_name},
-            description=narration or f"Transfer to {recipient_name}", risk_score=ra.score)
+            description=narration or f"Transfer to {recipient_name}", risk_score=ra.score,
+            meta={"sender_name": user.full_name, "narration": narration or None})
         db.add(txn)
         db.flush()
         lines = [Line(src.ledger_account_id, DR, amount + fee), Line(dst.ledger_account_id, CR, amount)]

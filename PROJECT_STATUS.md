@@ -8,7 +8,7 @@ No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production 
 ## Verified state (re-run these to confirm)
 | Check | Command | Last result |
 |---|---|---|
-| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 116 passed |
+| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 122 passed |
 | Backend lint | `../.venv/bin/ruff check app tests` | clean |
 | Migrations match models | `../.venv/bin/alembic upgrade head && ../.venv/bin/alembic check` | no drift |
 | Frontend typecheck/build | `cd frontend && npm run build` | ok (initial JS ≈ 85 KB gz) |
@@ -17,13 +17,14 @@ No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production 
 | Browser maker-checker flow | admin raises GHS 2,500 adjustment → second finance user approves | executed, ledger balanced |
 | Browser journey (register → deposit → send → limit → link checkout) | `node frontend/e2e/journey.cjs …` | all steps pass |
 | Browser KYC documents flow | `node frontend/e2e/kyc.cjs <dir>` | upload → submit → reviewer previews → approve |
+| Browser PDF downloads | statement + receipt buttons | both return valid PDFs |
 | Load test | `python backend/scripts/loadtest.py` | 400/400 ok, ~71 req/s, ledger balanced |
 
 ## Module status
 | Module | Status | Notes |
 |---|---|---|
 | A. Customer management | ✅ Done | registration, login/lockout, 2FA, sessions, reset, email verify, profile, KYC tiers, restrictions, notifications, support |
-| B. Digital wallet | ✅ Done | multi-wallet, ledger, deposits, withdrawals, transfers, beneficiaries, history, statements (JSON/CSV), reversals, fees, limits |
+| B. Digital wallet | ✅ Done | multi-wallet, ledger, deposits, withdrawals, transfers, beneficiaries, history, statements (JSON/CSV/PDF), receipts, reversals, fees, limits |
 | C. Payment infrastructure | ✅ Done (sandbox) | payment requests, checkout, links, webhooks, settlements, refunds, reconciliation; provider adapters (MTN, Paystack implemented; Telecel/AT/GhIPSS skeletons) |
 | D. Business accounts | ✅ Done | onboarding/review, profiles, merchant codes, team roles, business wallets, monitoring, reports |
 | E. Developer platform | ✅ Done | apps, keys, gateway API, sandbox, webhooks + logs, usage analytics, quick-start docs, OpenAPI |

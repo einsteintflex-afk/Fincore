@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -32,12 +32,18 @@ from app.schemas.common import (
     WalletOut,
     WithdrawIn,
 )
+from app.services import pdf
 from app.services import wallets as wsvc
 from app.services.audit import audit
 from app.services.ghana import BANKS, NETWORK_NAMES, detect_network, normalize_msisdn, validate_bank
 from app.services.transactions import TransactionService
 
 router = APIRouter(tags=["Wallets & transactions"])
+
+
+def pdf_response(content: bytes, filename: str) -> Response:
+    return Response(content=content, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
 
 
 def wallet_out(db: Session, w: Wallet) -> WalletOut:
@@ -50,8 +56,11 @@ def txn_out(t: Transaction, wallet_ids: set[uuid.UUID] | None = None) -> Transac
     if wallet_ids is not None:
         if t.destination_wallet_id in wallet_ids and t.source_wallet_id not in wallet_ids:
             out.direction = "in"
+            out.description = wsvc.incoming_description(t) or out.description
+            out.fee = pdf.payer_fee(t, is_sender=False)
         elif t.source_wallet_id in wallet_ids:
             out.direction = "out"
+            out.fee = pdf.payer_fee(t, is_sender=True)
     return out
 
 
@@ -122,13 +131,16 @@ def _period(start: date | None, end: date | None) -> tuple[datetime, datetime]:
 
 @router.get("/wallets/{wallet_id}/statement")
 def statement(wallet_id: uuid.UUID, start: date | None = None, end: date | None = None,
-              format: str = Query("json", pattern="^(json|csv)$"), user: User = Depends(current_user),
+              format: str = Query("json", pattern="^(json|csv|pdf)$"), user: User = Depends(current_user),
               db: Session = Depends(get_db)):
     w = wsvc.get_owned_wallet(db, user, wallet_id)
     s, e = _period(start, end)
     data = wsvc.statement(db, w, s, e)
     if format == "json":
         return {**data, "account_name": user.full_name}
+    if format == "pdf":
+        name = f"fincore-statement-{w.account_number}-{s.date()}-{(e - timedelta(days=1)).date()}.pdf"
+        return pdf_response(pdf.statement_pdf(data, user.full_name), name)
     buf = io.StringIO()
     wr = csv.writer(buf)
     wr.writerow(["FinCore statement", w.account_number, user.full_name])
@@ -228,6 +240,13 @@ def _owned_txn(db: Session, user: User, ref_or_id: str) -> Transaction:
 def get_transaction(ref: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     t = _owned_txn(db, user, ref)
     return txn_out(t, {w.id for w in wsvc.user_wallets(db, user)})
+
+
+@router.get("/transactions/{ref}/receipt.pdf", response_class=Response)
+def transaction_receipt(ref: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    t = _owned_txn(db, user, ref)
+    return pdf_response(pdf.transaction_receipt(t, {w.id for w in wsvc.user_wallets(db, user)}),
+                        f"fincore-receipt-{t.reference}.pdf")
 
 
 @router.post("/transactions/{ref}/refresh", response_model=TransactionOut)

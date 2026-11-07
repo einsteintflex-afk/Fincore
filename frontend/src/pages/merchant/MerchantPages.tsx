@@ -22,7 +22,7 @@ import {
   Table,
   Tabs,
 } from "@/components/ui";
-import { api, newIdempotencyKey } from "@/lib/api";
+import { api, downloadFile, newIdempotencyKey } from "@/lib/api";
 import { amountError, dateOnly, dateTime, maskPhone, money, NETWORKS, titleCase } from "@/lib/format";
 import { useAction, useBusinesses, useGet } from "@/lib/hooks";
 import type { Business, Page, PaymentLink, PaymentRequest, Transaction, Wallet } from "@/lib/types";
@@ -244,6 +244,11 @@ function PaymentDetail({ p, onClose, bizId, canRefund }: { p: PaymentRequest | n
         ...(p.failure_reason ? [["Failure", p.failure_reason] as [string, string]] : []),
       ]} />
       {p.status === "pending" && <Button variant="secondary" className="mt-4 w-full" onClick={() => cancel.mutate(undefined)}>Cancel request</Button>}
+      {p.paid_at && (
+        <Button variant="secondary" className="mt-4 w-full" onClick={() => downloadFile(`/businesses/${bizId}/payment-requests/${p.reference}/receipt.pdf`, undefined, `fincore-payment-${p.reference}.pdf`)}>
+          Download receipt
+        </Button>
+      )}
       {refundable && canRefund && (
         <form className="mt-5 space-y-3 border-t border-slate-100 pt-4" onSubmit={(e) => { e.preventDefault(); refund.mutate(undefined); }}>
           <p className="text-sm font-medium">Refund</p>

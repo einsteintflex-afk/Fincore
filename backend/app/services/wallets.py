@@ -108,6 +108,21 @@ def wallet_owner_name(db: Session, wallet: Wallet) -> str:
     return (b.trading_name or b.name) if b else "Unknown"
 
 
+def incoming_description(t: Transaction, db: Session | None = None) -> str | None:
+    """How a transfer reads for its *recipient* (the stored description is the sender's wording)."""
+    if t.type != "transfer":
+        return None
+    meta = t.meta or {}
+    sender = meta.get("sender_name")
+    if not sender and db is not None and t.source_wallet_id:
+        src = db.get(Wallet, t.source_wallet_id)
+        sender = wallet_owner_name(db, src) if src else None
+    if not sender:
+        return None
+    note = meta.get("narration")
+    return f"Transfer from {sender}" + (f": {note}" if note else "")
+
+
 def balance(db: Session, wallet: Wallet) -> Decimal:
     acct = db.get(LedgerAccount, wallet.ledger_account_id)
     db.refresh(acct)
@@ -150,7 +165,8 @@ def statement(db: Session, wallet: Wallet, start: datetime, end: datetime) -> di
             total_out += entry.amount
         lines.append({
             "date": entry.created_at, "reference": t.reference if t else lt.reference,
-            "description": (t.description if t and t.description else lt.description) or lt.kind,
+            "description": ((credit and t and incoming_description(t, db))
+                            or (t.description if t and t.description else lt.description) or lt.kind),
             "type": t.type if t else lt.kind,
             "credit": entry.amount if credit else ZERO, "debit": ZERO if credit else entry.amount,
             "balance": entry.balance_after,

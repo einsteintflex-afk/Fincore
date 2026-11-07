@@ -10,6 +10,15 @@
 - Upload controls on the customer Verification page (camera capture for selfies on phones); previews in the
   admin KYC review dialog. `frontend/e2e/kyc.cjs` browser test.
 
+- PDF statements (`/wallets/{id}/statement?format=pdf`), transaction receipts, merchant payment receipts
+  and public checkout receipts (customer details masked). Sandbox watermark on every page while live
+  payments are disabled. Download buttons in the app.
+
+### Fixed
+- Recipients saw the sender's wording on incoming transfers ("Transfer to <me>"); they now see
+  "Transfer from <sender>: <narration>" in history, statements and receipts.
+- Customers were shown the merchant's fee on wallet payments; customer views now show the fee they paid.
+
 ### Changed
 - Business decision TD-019: direct provider integrations only; the Paystack adapter is dormant.
 
