@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from app.core import cache
 from app.core.errors import LimitExceeded
 from app.core.money import ZERO
 from app.models.enums import TxnStatus
@@ -17,10 +19,17 @@ from app.models.user import User
 COUNTED_STATUSES = (TxnStatus.PENDING, TxnStatus.PROCESSING, TxnStatus.SUCCESSFUL)
 
 
-def _rule(db: Session, tier: int, txn_type: str, currency: str) -> LimitRule | None:
-    return db.scalar(select(LimitRule).where(
-        LimitRule.kyc_tier == tier, LimitRule.transaction_type == txn_type,
-        LimitRule.currency == currency, LimitRule.active.is_(True)))
+def _rule(db: Session, tier: int, txn_type: str, currency: str) -> SimpleNamespace | None:
+    """Active limit rule as an immutable snapshot, cached briefly (rules change rarely)."""
+    def load():
+        r = db.scalar(select(LimitRule).where(
+            LimitRule.kyc_tier == tier, LimitRule.transaction_type == txn_type,
+            LimitRule.currency == currency, LimitRule.active.is_(True)))
+        if not r:
+            return None
+        return SimpleNamespace(per_transaction_max=r.per_transaction_max, daily_max=r.daily_max,
+                               monthly_max=r.monthly_max, max_balance=r.max_balance)
+    return cache.get_or_load(("limit_rule", tier, txn_type, currency), load)
 
 
 def _used(db: Session, user: User, txn_type: str, currency: str, since: datetime) -> Decimal:
@@ -37,14 +46,24 @@ def check_limits(db: Session, user: User, txn_type: str, amount: Decimal, curren
     if rule.per_transaction_max is not None and amount > rule.per_transaction_max:
         raise LimitExceeded(f"Amount exceeds your per-transaction limit of {currency} {rule.per_transaction_max:,.2f}",
                             details={"limit": "per_transaction", "max": str(rule.per_transaction_max)})
+    if rule.daily_max is None and rule.monthly_max is None:
+        return
     now = datetime.now(timezone.utc)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # One query for both windows (the month always contains today).
+    daily_used, monthly_used = db.execute(select(
+        func.coalesce(func.sum(case((Transaction.created_at >= day_start, Transaction.amount), else_=0)), 0),
+        func.coalesce(func.sum(Transaction.amount), 0),
+    ).where(Transaction.initiated_by_id == user.id, Transaction.type == txn_type, Transaction.currency == currency,
+            Transaction.status.in_(COUNTED_STATUSES), Transaction.created_at >= month_start)).one()
     if rule.daily_max is not None:
-        used = _used(db, user, txn_type, currency, now.replace(hour=0, minute=0, second=0, microsecond=0))
+        used = Decimal(daily_used)
         if used + amount > rule.daily_max:
             raise LimitExceeded(f"This would exceed your daily {txn_type} limit of {currency} {rule.daily_max:,.2f}",
                                 details={"limit": "daily", "max": str(rule.daily_max), "used": str(used)})
     if rule.monthly_max is not None:
-        used = _used(db, user, txn_type, currency, now.replace(day=1, hour=0, minute=0, second=0, microsecond=0))
+        used = Decimal(monthly_used)
         if used + amount > rule.monthly_max:
             raise LimitExceeded(
                 f"This would exceed your monthly {txn_type} limit of {currency} {rule.monthly_max:,.2f}",

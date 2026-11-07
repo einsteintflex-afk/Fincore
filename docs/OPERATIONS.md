@@ -56,6 +56,20 @@ problems listed in the reconciliation run. Corrections are only ever compensatin
 ## Performance
 Baseline (`backend/scripts/loadtest.py`, 4 uvicorn workers on a small 2-vCPU sandbox, local Postgres):
 400 concurrent wallet transfers at concurrency 20 → **~71 req/s, p50 263 ms, p95 450 ms, 0 errors**, ledger
-balanced afterwards. Each transfer performs limit/risk aggregate queries; optimisation options if needed:
-covering index on `transactions(initiated_by_id, type, created_at)`, caching fee/limit rules, and a read
-replica for analytics.
+balanced afterwards. Each transfer performs limit/risk aggregate queries.
+
+Session 2 optimisation (same machine, same parameters, two runs each):
+
+| | Throughput | p50 | p95 | DB statements per transfer |
+|---|---|---|---|---|
+| Before | 67.7–69.7 req/s | 271–280 ms | 415–424 ms | 30 |
+| After | 70.7–75.7 req/s | 253–264 ms | 381–446 ms | 26 |
+
+Changes: composite indexes (`transactions(initiated_by_id, type, created_at)`, `(source_wallet_id, created_at)`,
+`(destination_wallet_id, created_at)`, `(provider, status, created_at)`, `ledger_entries(account_id, created_at)`),
+one query for daily+monthly limit usage, 30-second per-process cache for fee/limit rules and 10-second cache for
+the maintenance flag (cleared on admin edits), and one fewer commit per idempotent request.
+Profiling shows the test box is CPU-bound (4 cores shared by the load generator, 4 API workers and PostgreSQL)
+and about a third of request time is database round-trips/commits. Scale out by adding API replicas and a
+dedicated database server; the indexes keep limit checks and statements fast as tables grow.
+Never disable `synchronous_commit` for the ledger database.

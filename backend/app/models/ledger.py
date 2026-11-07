@@ -19,6 +19,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -76,6 +77,7 @@ class LedgerTransaction(UUIDPk, Base):
 class LedgerEntry(UUIDPk, Base):
     __tablename__ = "ledger_entries"
     __table_args__ = (
+        Index("ix_ledger_entry_account_created", "account_id", "created_at"),
         CheckConstraint("amount > 0", name="ck_ledger_entry_positive"),
         CheckConstraint("direction in ('debit','credit')", name="ck_ledger_entry_direction"),
     )

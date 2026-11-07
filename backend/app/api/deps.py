@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core import cache
 from app.core.database import get_db
 from app.core.errors import AppError, Conflict, Forbidden, Unauthorized
 from app.core.security import decode_token
@@ -81,9 +82,11 @@ def client_ip(request: Request) -> str | None:
 
 
 def ensure_not_in_maintenance(db: Session) -> None:
-    s = db.get(SystemSetting, "maintenance_mode")
-    if s and s.value.get("enabled"):
-        raise AppError(s.value.get("message") or "FinCore is under maintenance. Please try again shortly.",
+    value = cache.get_or_load(("setting", "maintenance_mode"),
+                              lambda: dict((db.get(SystemSetting, "maintenance_mode") or SystemSetting(value={})).value),
+                              ttl=10)
+    if value.get("enabled"):
+        raise AppError(value.get("message") or "FinCore is under maintenance. Please try again shortly.",
                        code="maintenance", status_code=503)
 
 
@@ -130,29 +133,32 @@ def run_idempotent(db: Session, scope: str, key: str | None, payload: Any, fn: C
         q = select(IdempotencyRecord).where(IdempotencyRecord.scope == scope, IdempotencyRecord.key == key)
         return db.scalar(q.with_for_update() if lock else q)
 
-    if lookup() is None:
-        try:
-            db.add(IdempotencyRecord(scope=scope, key=key, request_hash=digest, completed=False))
-            db.commit()
-        except IntegrityError:
+    # Fast path (the normal case): reserve and claim the key in a single INSERT + commit.
+    rec = IdempotencyRecord(scope=scope, key=key, request_hash=digest, completed=False, note="owned")
+    db.add(rec)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # The key exists: a retry, a duplicate in flight, or a reuse with a different body. The row lock
+        # serialises concurrent duplicates; the loser sees note == "owned" (or the stored result).
+        rec = lookup(lock=True)
+        if rec.request_hash != digest:
             db.rollback()
-    # Row lock serialises concurrent duplicates: the loser sees note == "owned" (or the stored result).
-    rec = lookup(lock=True)
-    if rec.request_hash != digest:
-        db.rollback()
-        raise Conflict("Idempotency-Key was already used with a different request", code="idempotency_mismatch")
-    if rec.completed:
-        status, body = rec.status_code, rec.response_body or {}
-        db.rollback()
-        if status and status >= 400:
-            raise AppError(body.get("message", "Request failed"), code=body.get("code", "error"),
-                           status_code=status, details=body.get("details"))
-        return body
-    if rec.note == "owned":
-        db.rollback()
-        raise Conflict("A request with this Idempotency-Key is still being processed", code="idempotency_in_progress")
-    rec.note = "owned"
-    db.commit()
+            raise Conflict("Idempotency-Key was already used with a different request", code="idempotency_mismatch")
+        if rec.completed:
+            status, body = rec.status_code, rec.response_body or {}
+            db.rollback()
+            if status and status >= 400:
+                raise AppError(body.get("message", "Request failed"), code=body.get("code", "error"),
+                               status_code=status, details=body.get("details"))
+            return body
+        if rec.note == "owned":
+            db.rollback()
+            raise Conflict("A request with this Idempotency-Key is still being processed",
+                           code="idempotency_in_progress")
+        rec.note = "owned"  # an abandoned reservation (e.g. crashed worker) can be claimed again
+        db.commit()
     rec_id = rec.id
     try:
         result = fn()

@@ -265,3 +265,28 @@ def test_notifications(make_user):
     assert u.get("/me/notifications").json()["unread"] == 0
 
 
+
+
+def test_concurrent_duplicate_idempotency_keys_move_money_once(make_user):
+    a, b = make_user(kyc_tier=3), make_user(kyc_tier=3)
+    fund(a, "100")
+    body = {"wallet_id": a.wallet()["id"], "destination_account": b.wallet()["account_number"], "amount": "7"}
+    key = str(uuid.uuid4())
+    codes = []
+
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    def worker():
+        with TestClient(app) as c:
+            codes.append(c.post("/api/v1/transfers", json=body, headers={**a.h, "Idempotency-Key": key}).status_code)
+
+    threads = [threading.Thread(target=worker) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert set(codes) <= {201, 409} and 201 in codes, codes
+    assert Decimal(b.balance()) == Decimal("7.00")
+    integrity_ok()

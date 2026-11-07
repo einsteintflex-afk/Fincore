@@ -34,6 +34,9 @@ def _clean():
     tables = ", ".join(t.name for t in reversed(Base.metadata.sorted_tables))
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+    from app.core import cache
+
+    cache.clear()
     with SessionLocal() as db:
         seed_reference_data(db)
     yield

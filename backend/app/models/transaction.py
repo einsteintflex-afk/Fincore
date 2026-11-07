@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base, Timestamps, UUIDPk
@@ -17,6 +17,13 @@ MONEY = Numeric(20, 4)
 
 class Transaction(UUIDPk, Timestamps, Base):
     __tablename__ = "transactions"
+    __table_args__ = (
+        # Hot paths: limit checks / velocity rules, wallet history, statements, recon windows.
+        Index("ix_txn_initiator_type_created", "initiated_by_id", "type", "created_at"),
+        Index("ix_txn_source_created", "source_wallet_id", "created_at"),
+        Index("ix_txn_destination_created", "destination_wallet_id", "created_at"),
+        Index("ix_txn_provider_status_created", "provider", "status", "created_at"),
+    )
 
     reference: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     type: Mapped[str] = mapped_column(String(32), index=True)

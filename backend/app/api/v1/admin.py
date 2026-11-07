@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_roles, staff_user
 from app.api.v1.businesses import biz_out
 from app.api.v1.wallets import txn_out, wallet_out
+from app.core import cache
 from app.core.config import settings
 from app.core.database import get_db, utcnow
 from app.core.errors import Conflict, NotFound, ValidationFailed
@@ -444,6 +445,7 @@ def fees(staff: User = Depends(staff_user), db: Session = Depends(get_db)):
 def create_fee(body: FeeRuleIn, staff: User = Depends(finance), db: Session = Depends(get_db)):
     rule = FeeRule(**body.model_dump())
     db.add(rule)
+    cache.clear()
     audit(db, "config.fee_created", actor_id=staff.id, actor_type="staff", target_type="fee_rule",
           details=body.model_dump())
     db.commit()
@@ -458,6 +460,7 @@ def update_fee(rule_id: uuid.UUID, body: FeeRuleIn, staff: User = Depends(financ
     before = FeeRuleOut.model_validate(rule).model_dump()
     for k, v in body.model_dump().items():
         setattr(rule, k, v)
+    cache.clear()
     audit(db, "config.fee_updated", actor_id=staff.id, actor_type="staff", target_type="fee_rule",
           target_id=rule.id, details={"before": before, "after": body.model_dump()})
     db.commit()
@@ -479,6 +482,7 @@ def upsert_limit(body: LimitRuleIn, staff: User = Depends(finance), db: Session 
         db.add(rule)
     for k, v in body.model_dump().items():
         setattr(rule, k, v)
+    cache.clear()
     audit(db, "config.limit_updated", actor_id=staff.id, actor_type="staff", target_type="limit_rule",
           details=body.model_dump())
     db.commit()
@@ -514,6 +518,7 @@ def put_setting(key: str, body: SettingIn, staff: User = Depends(admin_only), db
         db.add(s)
     before = s.value
     s.value, s.updated_by_id = body.value, staff.id
+    cache.clear()
     audit(db, "config.setting_updated", actor_id=staff.id, actor_type="staff", target_type="setting", target_id=key,
           details={"before": before, "after": body.value})
     db.commit()

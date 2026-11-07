@@ -27,7 +27,7 @@ Legend: ✅ done · 🔜 next · ⏳ blocked on owner/external · 📐 designed
 5. ✅ KYC document upload (private storage: local disk or S3-compatible; signed, expiring, audit-logged staff links)
 6. ✅ PDF statements and receipts (customer, merchant, public checkout; sandbox watermark)
 7. ✅ Provider settlement-file upload for reconciliation (CSV) in admin UI
-8. 🔜 Redis-backed rate limiter option; covering indexes from load-test findings
+8. ✅ Covering indexes, config caching, fewer commits (measured) · 🔜 Redis-backed rate limiter option
 9. 🔜 Frontend e2e suite in CI (Playwright) and visual regression snapshots
 10. 🔜 Customer notification preferences; in-app receipt sharing
 

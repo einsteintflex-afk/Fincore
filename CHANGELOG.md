@@ -18,6 +18,10 @@
   aliases, line-numbered validation errors); FinCore reports amount/status mismatches, rows unknown to FinCore
   and FinCore successes missing from the file. Readable discrepancy view in the admin console.
 
+- Performance: composite indexes on hot transaction/ledger paths, single query for limit usage, short-lived
+  config caches, one fewer commit per idempotent request (~7% more throughput on the test box; see OPERATIONS.md).
+- Test: concurrent duplicate Idempotency-Key requests move money exactly once.
+
 ### Fixed
 - Recipients saw the sender's wording on incoming transfers ("Transfer to <me>"); they now see
   "Transfer from <sender>: <narration>" in history, statements and receipts.

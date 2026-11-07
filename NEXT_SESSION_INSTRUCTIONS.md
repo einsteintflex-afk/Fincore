@@ -18,7 +18,7 @@ su postgres -c "psql -c 'CREATE DATABASE fincore_test OWNER fincore;'" || true
 python3 -m venv .venv && .venv/bin/pip install -q -r backend/requirements-dev.txt
 cd backend
 ../.venv/bin/ruff check app tests
-../.venv/bin/python -m pytest                 # expect all green (127+)
+../.venv/bin/python -m pytest                 # expect all green (128+)
 ../.venv/bin/alembic upgrade head && ../.venv/bin/alembic check
 ../.venv/bin/python -m app.cli demo-data      # demo users, password Demo!Pass2026
 cd ../frontend && npm install && npm run build && npm test
