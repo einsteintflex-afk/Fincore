@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func, or_, select
@@ -40,7 +40,7 @@ from app.models.ops import (
 )
 from app.models.transaction import FeeRule, LimitRule, Transaction
 from app.models.user import AccountRestriction, KycSubmission, User
-from app.providers import provider_status
+from app.providers import PROVIDER_CLASSES, provider_status
 from app.schemas.common import (
     AdjustIn,
     ApprovalOut,
@@ -561,6 +561,20 @@ def recon_ledger(staff: User = Depends(finance), db: Session = Depends(get_db)):
 @router.post("/reconciliation/providers", response_model=ReconciliationOut)
 def recon_providers(provider: str | None = None, staff: User = Depends(finance), db: Session = Depends(get_db)):
     return reconciliation.run_provider_reconciliation(db, provider, staff.id)
+
+
+@router.post("/reconciliation/providers/upload", response_model=ReconciliationOut)
+async def recon_upload(provider: str = Form(...), file: UploadFile = File(...), staff: User = Depends(finance),
+                       db: Session = Depends(get_db)):
+    """Reconcile a provider's settlement/statement CSV against FinCore's transactions."""
+    if provider not in PROVIDER_CLASSES:
+        raise ValidationFailed("Unknown provider")
+    content = await file.read(reconciliation.MAX_FILE_BYTES + 1)
+    run = reconciliation.reconcile_settlement_file(db, provider, file.filename or "upload.csv", content, staff.id)
+    audit(db, "reconciliation.file_uploaded", actor_id=staff.id, actor_type="staff", target_type="reconciliation",
+          target_id=run.id, details={"provider": provider, "file": file.filename, "summary": run.summary})
+    db.commit()
+    return run
 
 
 @router.get("/reconciliation/runs", response_model=list[ReconciliationOut])

@@ -14,6 +14,10 @@
   and public checkout receipts (customer details masked). Sandbox watermark on every page while live
   payments are disabled. Download buttons in the app.
 
+- Provider settlement-file reconciliation: finance uploads a provider CSV (flexible column names, status
+  aliases, line-numbered validation errors); FinCore reports amount/status mismatches, rows unknown to FinCore
+  and FinCore successes missing from the file. Readable discrepancy view in the admin console.
+
 ### Fixed
 - Recipients saw the sender's wording on incoming transfers ("Transfer to <me>"); they now see
   "Transfer from <sender>: <narration>" in history, statements and receipts.

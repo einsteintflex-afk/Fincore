@@ -327,7 +327,7 @@ function AdminTxnTable({ rows, onClick }: { rows: Transaction[]; onClick?: (t: T
 
 export function AdminTransactions() {
   const [page, setPage] = useState(1);
-  const [f, setF] = useState({ search: "", type: "", status: "", provider: "", min_risk: "" });
+  const [f, setF] = useState({ search: new URLSearchParams(window.location.search).get("search") ?? "", type: "", status: "", provider: "", min_risk: "" });
   const q = useGet<Page<Transaction>>(["admin-txns", page, f], "/admin/transactions", { page, page_size: 25, ...f });
   const [sel, setSel] = useState<string | null>(null);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setPage(1); setF({ ...f, [k]: e.target.value }); };
@@ -489,13 +489,14 @@ export function AdminFinance() {
     <>
       <PageHeader title="Finance & reconciliation" />
       <Tabs value={tab} onChange={setTab} tabs={[{ value: "recon", label: "Reconciliation" }, { value: "tb", label: "Trial balance" }, { value: "revenue", label: "Revenue" }, { value: "failures", label: "Failure analysis" }, { value: "merchants", label: "Merchant performance" }]} />
+      {tab === "recon" && <SettlementUpload onDone={setSel} />}
       {tab === "recon" && (
-        <Card title="Reconciliation runs" actions={<><Button size="sm" onClick={() => runLedger.mutate(undefined)} loading={runLedger.isPending}>Run ledger check</Button><Button size="sm" variant="secondary" onClick={() => runProv.mutate(undefined)} loading={runProv.isPending}>Run provider recon</Button></>}>
+        <Card title="Reconciliation runs" className="mt-6" actions={<><Button size="sm" onClick={() => runLedger.mutate(undefined)} loading={runLedger.isPending}>Run ledger check</Button><Button size="sm" variant="secondary" onClick={() => runProv.mutate(undefined)} loading={runProv.isPending}>Run provider recon</Button></>}>
           {runs.isLoading ? <Spinner /> : !runs.data?.length ? <Empty title="No runs yet" /> : (
             <Table rows={runs.data} keyFn={(r) => r.id} onRowClick={setSel}
               columns={[
                 { header: "When", cell: (r) => dateTime(r.created_at) },
-                { header: "Kind", cell: (r) => titleCase(r.kind) },
+                { header: "Kind", cell: (r) => `${titleCase(r.kind)}${r.provider ? ` · ${r.provider}` : ""}${r.summary?.file_name ? ` · ${r.summary.file_name}` : ""}` },
                 { header: "Result", cell: (r) => <Badge>{r.status}</Badge> },
                 { header: "Issues", cell: (r) => r.discrepancies.length },
               ]} />
@@ -538,9 +539,76 @@ export function AdminFinance() {
         </Card>
       ))}
       <Modal open={!!sel} onClose={() => setSel(null)} title="Reconciliation run" wide>
-        {sel && <pre className="overflow-x-auto rounded-lg bg-slate-50 p-4 text-xs">{JSON.stringify({ summary: sel.summary, discrepancies: sel.discrepancies }, null, 2)}</pre>}
+        {sel && <ReconRunDetail run={sel} />}
       </Modal>
     </>
+  );
+}
+
+const DISCREPANCY_LABELS: Record<string, string> = {
+  amount_mismatch: "Amount differs",
+  status_mismatch: "Status differs",
+  missing_internal: "In provider file, not in FinCore",
+  missing_in_provider_file: "In FinCore, not in provider file",
+  in_flight: "Still processing",
+  unbalanced_journal: "Unbalanced journal",
+  balance_mismatch: "Cached balance mismatch",
+  negative_balance: "Negative balance",
+  trial_balance: "Trial balance off",
+};
+
+function ReconRunDetail({ run }: { run: any }) {
+  const s = run.summary ?? {};
+  return (
+    <>
+      <div className="mb-4 grid gap-3 sm:grid-cols-4">
+        <Stat label="Result" value={<Badge>{run.status}</Badge>} />
+        <Stat label="Rows checked" value={s.records ?? s.accounts_checked ?? "—"} />
+        <Stat label="Matched" value={s.matched ?? "—"} />
+        <Stat label="Issues" value={run.discrepancies.length} />
+      </div>
+      {s.file_name && <p className="mb-3 text-sm text-slate-600">File: <b>{s.file_name}</b>{s.period && <> · {dateOnly(s.period[0])} – {dateOnly(s.period[1])}</>}</p>}
+      {run.discrepancies.length === 0 ? <Alert tone="success">Everything matched.</Alert> : (
+        <Table rows={run.discrepancies.map((d: any, i: number) => ({ ...d, _i: i }))} keyFn={(d: any) => String(d._i)}
+          columns={[
+            { header: "Issue", cell: (d: any) => <Badge tone={d.type === "in_flight" ? "processing" : "failed"}>{DISCREPANCY_LABELS[d.type] ?? d.type}</Badge> },
+            { header: "Reference", cell: (d: any) => d.reference
+              ? <Link className="font-mono text-xs text-brand-700" to={`/admin/transactions?search=${d.reference}`}>{d.reference}</Link>
+              : <span className="font-mono text-xs">{d.provider_reference ?? d.internal_reference ?? d.account ?? "—"}</span> },
+            { header: "Details", cell: (d: any) => (
+              <span className="text-xs text-slate-600">
+                {d.provider_amount !== undefined ? `provider ${money(d.provider_amount)} vs FinCore ${money(d.internal_amount)}`
+                  : d.provider_status ? `provider ${d.provider_status} vs FinCore ${d.internal_status}`
+                  : d.amount ? money(d.amount) : d.since ? `since ${dateTime(d.since)}` : ""}
+              </span>) },
+          ]} />
+      )}
+    </>
+  );
+}
+
+function SettlementUpload({ onDone }: { onDone: (run: any) => void }) {
+  const [provider, setProvider] = useState("mtn_momo");
+  const [file, setFile] = useState<File | null>(null);
+  const upload = useAction(() => {
+    const fd = new FormData();
+    fd.append("provider", provider);
+    fd.append("file", file as File);
+    return api("/admin/reconciliation/providers/upload", { body: fd });
+  }, { invalidate: [["recon-runs"]], success: (r: any) => `File reconciled: ${r.status}`, onSuccess: (r) => { setFile(null); onDone(r); } });
+  return (
+    <Card title="Reconcile a provider settlement file">
+      <form className="grid gap-3 sm:grid-cols-4 sm:items-end" onSubmit={(e) => { e.preventDefault(); upload.mutate(undefined); }}>
+        <Select label="Provider" value={provider} onChange={(e) => setProvider(e.target.value)}>
+          {["mtn_momo", "telecel_cash", "at_money", "ghipss", "sandbox"].map((p) => <option key={p} value={p}>{p}</option>)}
+        </Select>
+        <div className="sm:col-span-2">
+          <Input label="CSV file" type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </div>
+        <Button type="submit" disabled={!file} loading={upload.isPending}>Upload & reconcile</Button>
+      </form>
+      <p className="mt-3 text-xs text-slate-500">CSV with columns for the transaction reference (provider or FinCore), amount, status and optionally an ISO date. With dates, FinCore also lists its own successful transactions missing from the file.</p>
+    </Card>
   );
 }
 

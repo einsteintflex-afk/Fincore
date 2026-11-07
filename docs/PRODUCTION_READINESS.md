@@ -26,7 +26,8 @@ approval or production readiness. This is the gap list, grouped by who must act.
 - [ ] Redis-backed rate limiter or edge limits for multi-instance deployments
 - [x] Automatic settlements on schedule (daily/weekly)
 - [x] PDF statements and receipts
-- [ ] Provider settlement-file ingestion (upload UI) for reconciliation
+- [x] Provider settlement-file upload (CSV) for reconciliation
+- [ ] Provider-specific column profiles once real MTN/Telecel/AT/GhIPSS statement files are received
 - [ ] Load testing at target volume on production-like infrastructure
 - [ ] Observability stack (Prometheus/Grafana dashboards, alert rules, Sentry)
 - [ ] Customer-facing mobile apps (current SPA is mobile-responsive)

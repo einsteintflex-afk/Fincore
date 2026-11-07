@@ -7153,6 +7153,48 @@
     }
    }
   },
+  "/api/v1/admin/reconciliation/providers/upload": {
+   "post": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Recon Upload",
+    "description": "Reconcile a provider's settlement/statement CSV against FinCore's transactions.",
+    "operationId": "recon_upload_api_v1_admin_reconciliation_providers_upload_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_recon_upload_api_v1_admin_reconciliation_providers_upload_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReconciliationOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/admin/reconciliation/runs": {
    "get": {
     "tags": [
@@ -7925,6 +7967,25 @@
      "created_at"
     ],
     "title": "BeneficiaryOut"
+   },
+   "Body_recon_upload_api_v1_admin_reconciliation_providers_upload_post": {
+    "properties": {
+     "provider": {
+      "type": "string",
+      "title": "Provider"
+     },
+     "file": {
+      "type": "string",
+      "format": "binary",
+      "title": "File"
+     }
+    },
+    "type": "object",
+    "required": [
+     "provider",
+     "file"
+    ],
+    "title": "Body_recon_upload_api_v1_admin_reconciliation_providers_upload_post"
    },
    "Body_upload_kyc_document_api_v1_me_kyc_documents_post": {
     "properties": {

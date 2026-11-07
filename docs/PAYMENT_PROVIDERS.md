@@ -55,3 +55,11 @@ Every provider call writes a `provider_transactions` row. `Admin → Finance →
 `python -m app.cli reconcile`) compares provider records — or an uploaded settlement file passed to
 `run_provider_reconciliation(statement=[...])` — with internal transactions and flags
 `missing_internal`, `amount_mismatch`, `status_mismatch` and `in_flight` items.
+
+Finance can upload a provider's statement/settlement CSV in Admin → Finance → Reconciliation
+(`POST /admin/reconciliation/providers/upload`). Accepted columns (case-insensitive aliases):
+transaction reference (`provider_reference`/`Transaction ID`, or FinCore `reference`), `amount`, `status`
+(success/completed/paid, failed/rejected/reversed, pending...) and optional ISO `date`. When every row has
+a date, FinCore also lists its own successful transactions in that period that the provider file lacks
+(`missing_in_provider_file`). Add provider-specific aliases in `services/reconciliation.py::COLUMN_ALIASES`
+once each operator's real statement format is known.
