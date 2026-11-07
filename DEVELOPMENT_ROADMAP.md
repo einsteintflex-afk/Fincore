@@ -32,7 +32,7 @@ Legend: ✅ done · 🔜 next · ⏳ blocked on owner/external · 📐 designed
 10. 🔜 Customer notification preferences; in-app receipt sharing
 
 ## Phase 4 — Go-live enablement ⏳ (needs business owner)
-- ⏳ Provider credentials (MTN MoMo / Paystack / Telecel / AT / sponsor bank) → enable adapters, test in provider sandboxes
+- ⏳ Direct provider agreements (MTN MoMo, Telecel Cash, AT Money, GhIPSS sponsor bank) → implement/enable adapters, test in each provider sandbox (no third-party gateway, TD-019)
 - ⏳ Email + SMS providers → wire outbox
 - ⏳ NIA/Ghana Card verification vendor → implement `IdentityVerifier`
 - ⏳ Hosting account, domains, secrets manager, monitoring (Sentry/Grafana)

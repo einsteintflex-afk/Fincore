@@ -1,5 +1,9 @@
 # Payment provider integrations
 
+**Strategy (TD-019): direct integrations only.** FinCore connects straight to each mobile-money network and
+to the bank network. No aggregator/gateway is used. Order of work: MTN MoMo (adapter already built) →
+Telecel Cash → AT Money → GhIPSS bank transfers, each as soon as its partner agreement and API spec arrive.
+
 All adapters implement `app/providers/base.py::PaymentProvider`. Routing is configured per rail with
 `FINCORE_ROUTE_MTN`, `FINCORE_ROUTE_TELECEL`, `FINCORE_ROUTE_AT`, `FINCORE_ROUTE_BANK` and only takes
 effect when `FINCORE_LIVE_PAYMENTS_ENABLED=true`. Adapter status is visible in Admin → Overview → Payment providers.
@@ -25,7 +29,7 @@ effect when `FINCORE_LIVE_PAYMENTS_ENABLED=true`. Adapter status is visible in A
 Sandbox credentials can be self-provisioned at https://momodeveloper.mtn.com (free) to test the adapter
 end-to-end; note the MTN sandbox only accepts `EUR`, which the adapter handles automatically.
 
-### Paystack (licensed gateway — fastest path to all three networks + banks)
+### Paystack — NOT USED (kept dormant, see TD-019)
 1. Paystack Ghana business account (requires registered business documents).
 2. Secret key (`sk_live_…`), webhook URL `https://<api-domain>/api/v1/callbacks/paystack`.
 3. Funded Paystack balance for transfers (payouts).
@@ -37,7 +41,7 @@ their API specification, credentials and callback signing scheme. Implement the 
 
 ### Banks (GhIPSS)
 Direct GIP/GhIPSS Instant Pay access is via a sponsor bank. Needed: sponsor-bank agreement, institution
-code, API credentials and specification. Until then route bank payouts through Paystack.
+code, API credentials and specification.
 
 ## Adding a provider
 1. Implement `PaymentProvider` (idempotent on our `reference`; map statuses to `successful|pending|failed`).

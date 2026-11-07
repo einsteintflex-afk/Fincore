@@ -70,3 +70,11 @@ reset). Per-process only; production should enforce limits at the edge too (docu
 
 **TD-018 Code-split SPA by portal.** Customer users don't download admin code; charts load lazily.
 Initial JS ≈ 85 KB gzipped.
+
+**TD-019 Direct integrations, no third-party gateway (business owner decision, 2026-11-07).** FinCore will
+connect directly to MTN MoMo, Telecel Cash, AT Money and the bank network (GhIPSS) instead of routing through
+an aggregator such as Paystack. The Paystack adapter stays in the codebase but is never routed to (all
+`FINCORE_ROUTE_*` values point to direct adapters or the sandbox); it can be deleted later. Consequence:
+go-live depends on a Bank of Ghana PSP/EMI licence and a direct agreement with each network and a GhIPSS
+sponsor bank (or direct GhIPSS membership), because those operators only open their APIs to contracted,
+licensed partners.
