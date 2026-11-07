@@ -35,7 +35,7 @@ end-to-end; note the MTN sandbox only accepts `EUR`, which the adapter handles a
 3. Funded Paystack balance for transfers (payouts).
 
 ### Telecel Cash, AT Money
-Partner agreement with each operator (or with an aggregator such as Hubtel/ExpressPay/Paystack) to obtain
+Direct partner agreement with each operator to obtain
 their API specification, credentials and callback signing scheme. Implement the three methods in
 `app/providers/pending.py`, add mocked tests, then switch the route.
 
