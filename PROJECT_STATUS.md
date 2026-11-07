@@ -1,6 +1,6 @@
 # Project status
 
-_Last updated: 2026-11-06 (session 1)_
+_Last updated: 2026-11-07 (session 2)_
 
 **Overall:** Phase 1 (foundation) and Phase 2 (core product) are built and verified in sandbox mode.
 No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production provider credentials exist.
@@ -8,7 +8,7 @@ No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production 
 ## Verified state (re-run these to confirm)
 | Check | Command | Last result |
 |---|---|---|
-| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 110 passed |
+| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 116 passed |
 | Backend lint | `../.venv/bin/ruff check app tests` | clean |
 | Migrations match models | `../.venv/bin/alembic upgrade head && ../.venv/bin/alembic check` | no drift |
 | Frontend typecheck/build | `cd frontend && npm run build` | ok (initial JS ≈ 85 KB gz) |
@@ -16,6 +16,7 @@ No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production 
 | Browser smoke (32 pages, 4 portals) | `node frontend/e2e/smoke.cjs <dir>` | 0 console/page errors |
 | Browser maker-checker flow | admin raises GHS 2,500 adjustment → second finance user approves | executed, ledger balanced |
 | Browser journey (register → deposit → send → limit → link checkout) | `node frontend/e2e/journey.cjs …` | all steps pass |
+| Browser KYC documents flow | `node frontend/e2e/kyc.cjs <dir>` | upload → submit → reviewer previews → approve |
 | Load test | `python backend/scripts/loadtest.py` | 400/400 ok, ~71 req/s, ledger balanced |
 
 ## Module status
@@ -33,6 +34,6 @@ No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production 
 
 ## Known limitations
 - Email/SMS are queued and logged, not delivered (no provider configured).
-- KYC documents are references only; no file upload storage yet.
+- Uploaded documents are not malware-scanned yet.
 - Rate limiting is per process.
 - Docker images were written but not built in this sandbox (no Docker daemon); the stack was verified with local PostgreSQL + uvicorn + Vite.

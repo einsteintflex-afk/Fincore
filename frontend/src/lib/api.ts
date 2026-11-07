@@ -91,7 +91,7 @@ export async function api<T = any>(path: string, opts: RequestOptions = {}, retr
     if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
   });
   const headers: Record<string, string> = { Accept: "application/json", ...WEB_HEADERS };
-  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  if (opts.body !== undefined && !(opts.body instanceof FormData)) headers["Content-Type"] = "application/json";
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
@@ -101,7 +101,7 @@ export async function api<T = any>(path: string, opts: RequestOptions = {}, retr
       method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
       credentials: "include",
       headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: opts.body instanceof FormData ? opts.body : opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
   } catch {
     throw new ApiError(0, "network_error", "Can't reach FinCore. Check your connection and try again.");

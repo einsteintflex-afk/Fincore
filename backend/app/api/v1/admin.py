@@ -242,6 +242,19 @@ def kyc_queue(status: str = "pending", page: int = Query(1, ge=1), page_size: in
     return _page(db, q, page, page_size, KycSubmission.created_at)
 
 
+@router.get("/kyc/{submission_id}/documents")
+def kyc_documents(submission_id: uuid.UUID, staff: User = Depends(compliance), db: Session = Depends(get_db)):
+    """Short-lived signed links to the submission's documents. Every access is audit-logged."""
+    sub = db.get(KycSubmission, submission_id)
+    if not sub:
+        raise NotFound("Submission not found")
+    docs = kyc.signed_documents(db, sub)
+    audit(db, "kyc.documents_viewed", actor_id=staff.id, actor_type="staff", target_type="kyc",
+          target_id=sub.id, details={"documents": [d["id"] for d in docs]})
+    db.commit()
+    return docs
+
+
 @router.post("/kyc/{submission_id}/review", response_model=KycOut)
 def kyc_review(submission_id: uuid.UUID, body: ReviewIn, staff: User = Depends(compliance),
                db: Session = Depends(get_db)):

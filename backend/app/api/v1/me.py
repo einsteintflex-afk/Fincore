@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
+from app.core.config import settings
 from app.core.database import get_db, utcnow
 from app.core.errors import Conflict, NotFound
 from app.models.ops import SupportTicket, TicketMessage
-from app.models.user import KycSubmission, Notification, User
+from app.models.user import KycDocument, KycSubmission, Notification, User
 from app.schemas.common import (
+    KycDocumentOut,
     KycIn,
     KycOut,
     Message,
@@ -100,6 +102,19 @@ def read_one(notification_id: uuid.UUID, user: User = Depends(current_user), db:
 @router.post("/kyc", response_model=KycOut, status_code=201)
 def submit_kyc(body: KycIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     return kyc.submit(db, user, body.model_dump())
+
+
+@router.post("/kyc/documents", response_model=KycDocumentOut, status_code=201)
+async def upload_kyc_document(kind: str = Form(...), file: UploadFile = File(...),
+                              user: User = Depends(current_user), db: Session = Depends(get_db)):
+    data = await file.read(settings.kyc_max_upload_bytes + 1)
+    return kyc.upload_document(db, user, kind, data)
+
+
+@router.get("/kyc/documents", response_model=list[KycDocumentOut])
+def my_kyc_documents(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return db.scalars(select(KycDocument).where(KycDocument.user_id == user.id)
+                      .order_by(KycDocument.created_at.desc())).all()
 
 
 @router.get("/kyc", response_model=list[KycOut])

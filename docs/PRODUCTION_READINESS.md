@@ -21,7 +21,8 @@ approval or production readiness. This is the gap list, grouped by who must act.
 - [x] Refresh token in HttpOnly SameSite cookie (TD-011)
 - [x] AML transaction monitoring scenarios + CSV case export
 - [ ] Sanctions/PEP screening on onboarding; goAML XML STR export for FIC
-- [ ] KYC document upload to encrypted object storage with virus scanning
+- [x] KYC document upload to private storage (S3 server-side encryption, content-sniffed types, size limits)
+- [ ] Malware scanning of uploaded documents (e.g. ClamAV sidecar) before reviewer access
 - [ ] Redis-backed rate limiter or edge limits for multi-instance deployments
 - [x] Automatic settlements on schedule (daily/weekly)
 - [ ] Statement PDF generation (CSV/JSON exist)

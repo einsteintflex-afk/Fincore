@@ -38,6 +38,10 @@ include Ghanaian data centres and in-country cloud regions where available.
 All settings are environment variables prefixed `FINCORE_` — see `backend/.env.example`. Secrets
 (`SECRET_KEY`, `ENCRYPTION_KEY`, DB password, provider keys) must come from a secrets manager.
 
+KYC document storage: set `FINCORE_STORAGE_BACKEND=s3` with a private bucket (block all public access,
+default encryption, versioning, lifecycle per retention policy). If the bucket is on another domain, add it to
+the nginx CSP `img-src` so reviewers can preview images.
+
 Edge requirements:
 * TLS termination with HSTS; HTTP→HTTPS redirect.
 * Rate limiting at the edge (the in-app limiter is per process).

@@ -3,6 +3,9 @@ import os
 os.environ.setdefault("FINCORE_ENVIRONMENT", "test")
 os.environ.setdefault("FINCORE_DATABASE_URL", "postgresql+psycopg://fincore:fincore@localhost:5432/fincore_test")
 os.environ.setdefault("FINCORE_LIVE_PAYMENTS_ENABLED", "false")
+import tempfile  # noqa: E402
+
+os.environ.setdefault("FINCORE_STORAGE_LOCAL_DIR", tempfile.mkdtemp(prefix="fincore-test-storage-"))
 
 import re  # noqa: E402
 import uuid  # noqa: E402
@@ -135,3 +138,22 @@ def active_business(make_user, admin):
     r = admin.post(f"/admin/businesses/{biz['id']}/review", {"decision": "approve"})
     assert r.status_code == 200, r.text
     return owner, r.json()
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"0" * 64
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 64
+PDF = b"%PDF-1.4\n" + b"0" * 64
+
+
+def upload_doc(actor: Actor, kind: str, data: bytes = JPEG, name: str = "photo.jpg"):
+    return actor.client.post("/api/v1/me/kyc/documents", headers=actor.h, data={"kind": kind},
+                             files={"file": (name, data, "application/octet-stream")})
+
+
+def kyc_docs(actor: Actor, kinds=("id_front", "selfie")) -> list[str]:
+    ids = []
+    for k in kinds:
+        r = upload_doc(actor, k)
+        assert r.status_code == 201, r.text
+        ids.append(r.json()["id"])
+    return ids

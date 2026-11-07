@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.core.errors import FeatureDisabled
 from app.core.middleware import metrics
 from app.models.ops import SystemSetting
+from app.services.storage import get_storage, read_file_token
 
 router = APIRouter(tags=["System"])
 
@@ -48,6 +49,16 @@ def platform(db: Session = Depends(get_db)):
         "support": support.value if support else {},
         "investments_enabled": settings.investments_enabled,
     }
+
+
+@public.get("/files/{token}", include_in_schema=False)
+def signed_file(token: str):
+    """Serves a private file for a valid, unexpired signed token (local storage backend only)."""
+    key, content_type = read_file_token(token)
+    data = get_storage().get(key)
+    return Response(content=data, media_type=content_type,
+                    headers={"Cache-Control": "private, no-store", "Content-Disposition": "inline",
+                             "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"})
 
 
 investments = APIRouter(prefix="/investments", tags=["Investments (not active)"])

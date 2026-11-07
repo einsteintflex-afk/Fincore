@@ -228,6 +228,7 @@ export function AdminKyc() {
         {sel && (
           <>
             <KV items={[["Name", `${sel.first_name} ${sel.last_name}`], ["Date of birth", sel.date_of_birth], ["ID", `${titleCase(sel.id_type)} · ${sel.id_number}`], ["Tier requested", sel.tier_requested], ["Address", sel.address], ["GPS address", sel.digital_address], ["Automated check", sel.verification_result?.result ?? "—"], ["Submitted", dateTime(sel.created_at)]]} />
+            <KycDocuments submissionId={sel.id} />
             {sel.status === "pending" && (
               <div className="mt-4 space-y-3">
                 <Textarea label="Reviewer note (required for rejection)" value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
@@ -241,6 +242,27 @@ export function AdminKyc() {
         )}
       </Modal>
     </>
+  );
+}
+
+function KycDocuments({ submissionId }: { submissionId: string }) {
+  const q = useGet<any[]>(["kyc-docs", submissionId], `/admin/kyc/${submissionId}/documents`);
+  if (q.isLoading) return <Spinner label="Loading documents…" />;
+  if (!q.data?.length) return <p className="mt-3 text-sm text-slate-500">No documents attached.</p>;
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-3">
+      {q.data.map((d) => (
+        <a key={d.id} href={d.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg ring-1 ring-slate-200 hover:ring-brand-500">
+          {d.content_type.startsWith("image/") ? (
+            <img src={d.url} alt={titleCase(d.kind)} className="h-32 w-full bg-slate-100 object-cover" />
+          ) : (
+            <div className="flex h-32 items-center justify-center bg-slate-100 text-sm text-slate-600">PDF document</div>
+          )}
+          <p className="px-2 py-1 text-xs font-medium text-slate-700">{titleCase(d.kind)}</p>
+        </a>
+      ))}
+      <p className="col-span-2 text-xs text-slate-400">Links expire after 5 minutes. Viewing is recorded in the audit log.</p>
+    </div>
   );
 }
 

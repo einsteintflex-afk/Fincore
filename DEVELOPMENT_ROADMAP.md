@@ -24,7 +24,7 @@ Legend: ✅ done · 🔜 next · ⏳ blocked on owner/external · 📐 designed
 2. ✅ Maker-checker approvals for adjustments/reversals above thresholds (fee/limit changes: 🔜)
 3. ✅ Refresh token → HttpOnly cookie; CSRF header for cookie flow
 4. ✅ AML monitoring scenarios (structuring, rapid in/out, fan-in, dormant reactivation) + CSV case export (goAML XML: 🔜)
-5. 🔜 KYC document upload (S3-compatible storage abstraction, local dev backend)
+5. ✅ KYC document upload (private storage: local disk or S3-compatible; signed, expiring, audit-logged staff links)
 6. 🔜 PDF statements and receipts
 7. 🔜 Provider settlement-file upload for reconciliation (CSV) in admin UI
 8. 🔜 Redis-backed rate limiter option; covering indexes from load-test findings

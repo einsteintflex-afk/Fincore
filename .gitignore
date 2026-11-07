@@ -11,3 +11,5 @@ coverage/
 *.log
 backups/
 *.tsbuildinfo
+var/
+backend/var/

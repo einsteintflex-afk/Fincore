@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 — 2026-11-07 (session 2)
+
+### Added
+- KYC document uploads: ID front/back, selfie, proof of address. Types detected from file bytes (JPEG/PNG/PDF),
+  5 MB limit, random storage keys, private storage (local disk in development, S3-compatible with server-side
+  encryption in production). Tier 2 requires ID front + selfie; tier 3 also proof of address.
+- Compliance reviewers see document previews through 5-minute signed links; every view is audit-logged.
+- Upload controls on the customer Verification page (camera capture for selfies on phones); previews in the
+  admin KYC review dialog. `frontend/e2e/kyc.cjs` browser test.
+
+### Changed
+- Business decision TD-019: direct provider integrations only; the Paystack adapter is dormant.
+
 ## 0.2.0 — 2026-11-06 (session 1, continued)
 
 ### Added

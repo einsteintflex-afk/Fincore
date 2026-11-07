@@ -15,6 +15,7 @@ from app.models.ops import (
 from app.models.transaction import Beneficiary, FeeRule, LimitRule, ProviderTransaction, Transaction
 from app.models.user import (
     AccountRestriction,
+    KycDocument,
     KycSubmission,
     Notification,
     OutboundMessage,
@@ -37,6 +38,7 @@ __all__ = [
     "FeeRule",
     "FraudAlert",
     "IdempotencyRecord",
+    "KycDocument",
     "KycSubmission",
     "LedgerAccount",
     "LedgerEntry",

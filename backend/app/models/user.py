@@ -85,6 +85,20 @@ class KycSubmission(UUIDPk, Timestamps, Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class KycDocument(UUIDPk, Timestamps, Base):
+    """An uploaded identity document. Stored privately; staff view it through short-lived signed URLs."""
+
+    __tablename__ = "kyc_documents"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    submission_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("kyc_submissions.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(32))  # id_front | id_back | selfie | proof_of_address
+    storage_key: Mapped[str] = mapped_column(String(200), unique=True)
+    content_type: Mapped[str] = mapped_column(String(64))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+
+
 class Notification(UUIDPk, Timestamps, Base):
     __tablename__ = "notifications"
 

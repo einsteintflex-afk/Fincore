@@ -137,7 +137,7 @@ class KycIn(BaseModel):
     date_of_birth: date
     address: str | None = None
     digital_address: str | None = None
-    documents: dict[str, Any] | None = None
+    document_ids: list[uuid.UUID] = []
 
 
 class KycOut(ORM):
@@ -154,6 +154,7 @@ class KycOut(ORM):
     status: str
     review_note: str | None
     verification_result: dict
+    documents: dict
     created_at: datetime
     reviewed_at: datetime | None
 
@@ -722,4 +723,13 @@ class ApprovalOut(ORM):
     review_note: str | None
     reviewed_at: datetime | None
     result: dict
+    created_at: datetime
+
+
+class KycDocumentOut(ORM):
+    id: uuid.UUID
+    kind: str
+    content_type: str
+    size_bytes: int
+    submission_id: uuid.UUID | None
     created_at: datetime

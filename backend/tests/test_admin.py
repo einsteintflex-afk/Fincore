@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from tests.conftest import fund
+from tests.conftest import fund, kyc_docs
 from tests.test_wallets import integrity_ok
 
 
@@ -15,7 +15,7 @@ def test_kyc_submission_and_review(make_user, admin):
     assert minor.status_code == 422
     r = u.post("/me/kyc", {"tier_requested": 2, "id_type": "ghana_card", "id_number": "gha-123456789-0",
                            "first_name": "Ama", "last_name": "Owusu", "date_of_birth": "1992-03-06",
-                           "digital_address": "GA-123-4567"})
+                           "digital_address": "GA-123-4567", "document_ids": kyc_docs(u)})
     assert r.status_code == 201, r.text
     sub = r.json()
     assert sub["id_number"] == "GHA-123456789-0"
@@ -170,9 +170,9 @@ def test_duplicate_ghana_card_is_flagged(make_user, admin):
     body = {"tier_requested": 2, "id_type": "ghana_card", "id_number": "GHA-111222333-4", "first_name": "A",
             "last_name": "B", "date_of_birth": "1990-01-01"}
     first, second = make_user(kyc_tier=0), make_user(kyc_tier=0)
-    sub = first.post("/me/kyc", body).json()
+    sub = first.post("/me/kyc", {**body, "document_ids": kyc_docs(first)}).json()
     admin.post(f"/admin/kyc/{sub['id']}/review", {"decision": "approve"})
-    r = second.post("/me/kyc", body)
+    r = second.post("/me/kyc", {**body, "document_ids": kyc_docs(second)})
     assert r.status_code == 201 and r.json()["verification_result"]["duplicate_id_user"] == first.id
     alerts = admin.get("/admin/fraud-alerts").json()["items"]
     assert any(a["rule"] == "duplicate_identity" for a in alerts)

@@ -89,6 +89,17 @@ class Settings(BaseSettings):
 
     investments_enabled: bool = False
 
+    # --- File storage (KYC documents) ---
+    storage_backend: str = "local"  # local | s3
+    storage_local_dir: str = "var/storage"
+    storage_s3_bucket: str = ""
+    storage_s3_region: str = ""
+    storage_s3_endpoint_url: str = ""  # set for S3-compatible stores (MinIO, Wasabi, DigitalOcean Spaces...)
+    storage_s3_access_key_id: str = ""
+    storage_s3_secret_access_key: str = ""
+    storage_signed_url_ttl_seconds: int = 300
+    kyc_max_upload_bytes: int = 5 * 1024 * 1024
+
     @field_validator("environment")
     @classmethod
     def _env(cls, v: str) -> str:

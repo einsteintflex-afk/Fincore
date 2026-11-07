@@ -27,6 +27,7 @@ import { api, downloadFile, newIdempotencyKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { amountError, dateOnly, dateTime, detectNetwork, maskPhone, money, NETWORKS, titleCase } from "@/lib/format";
 import { useAction, useGet, useWallets } from "@/lib/hooks";
+import { useToast } from "@/components/toast";
 import type { Page, Transaction, Wallet } from "@/lib/types";
 
 // ------------------------------------------------------------------ shared
@@ -593,8 +594,29 @@ export function VerificationPage() {
   const subs = useGet<any[]>(["kyc"], "/me/kyc");
   const limits = useGet<any>(["limits"], "/me/limits");
   const [form, setForm] = useState({ tier_requested: String(Math.min((user?.kyc_tier ?? 0) + 1, 3)), id_type: "ghana_card", id_number: "", first_name: "", last_name: "", date_of_birth: "", address: "", digital_address: "" });
-  const submit = useAction(() => api("/me/kyc", { body: { ...form, tier_requested: Number(form.tier_requested) } }), {
-    invalidate: [["kyc"]], success: "Submitted for review", onSuccess: () => reload(),
+  const [docs, setDocs] = useState<Record<string, { id: string; name: string }>>({});
+  const [uploading, setUploading] = useState<string | null>(null);
+  const toast = useToast();
+  const tier = Number(form.tier_requested);
+  const needed = tier >= 3 ? ["id_front", "selfie", "proof_of_address"] : tier === 2 ? ["id_front", "selfie"] : [];
+  async function upload(kind: string, file: File | undefined) {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return toast.error("Files must be 5 MB or smaller");
+    const fd = new FormData();
+    fd.append("kind", kind);
+    fd.append("file", file);
+    setUploading(kind);
+    try {
+      const doc = await api("/me/kyc/documents", { body: fd });
+      setDocs((d) => ({ ...d, [kind]: { id: doc.id, name: file.name } }));
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setUploading(null);
+    }
+  }
+  const submit = useAction(() => api("/me/kyc", { body: { ...form, tier_requested: tier, document_ids: Object.values(docs).map((d) => d.id) } }), {
+    invalidate: [["kyc"]], success: "Submitted for review", onSuccess: () => { setDocs({}); reload(); },
   });
   const pending = subs.data?.find((s) => s.status === "pending");
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
@@ -639,8 +661,24 @@ export function VerificationPage() {
               <Input label="Date of birth" type="date" value={form.date_of_birth} onChange={set("date_of_birth")} required />
               <Input label="Residential address" value={form.address} onChange={set("address")} />
               <Input label="GhanaPost GPS address" placeholder="GA-123-4567" value={form.digital_address} onChange={set("digital_address")} />
-              <p className="text-xs text-slate-500">Document upload connects to a storage provider in production; reviewers verify your details against the national ID registry.</p>
-              <Button type="submit" className="w-full" loading={submit.isPending}>Submit for verification</Button>
+              <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+                <p className="text-sm font-medium text-slate-700">Documents {needed.length ? "(required)" : "(optional)"}</p>
+                {DOC_KINDS.filter(([k]) => needed.includes(k) || k === "id_back" || (k === "proof_of_address" && tier < 3)).map(([kind, label]) => (
+                  <label key={kind} className="flex items-center justify-between gap-3 text-sm">
+                    <span>{label}{needed.includes(kind) && <span className="text-rose-600"> *</span>}</span>
+                    <span className="flex items-center gap-2">
+                      {docs[kind] && <span className="max-w-[10rem] truncate text-xs text-emerald-700">✓ {docs[kind].name}</span>}
+                      <span className="cursor-pointer rounded-md bg-white px-2 py-1 text-xs font-medium ring-1 ring-slate-300 hover:bg-slate-100">
+                        {uploading === kind ? "Uploading…" : docs[kind] ? "Replace" : "Choose file"}
+                      </span>
+                      <input type="file" className="sr-only" accept="image/jpeg,image/png,application/pdf" capture={kind === "selfie" ? "user" : undefined}
+                        aria-label={label} onChange={(e) => upload(kind, e.target.files?.[0])} />
+                    </span>
+                  </label>
+                ))}
+                <p className="text-xs text-slate-500">JPEG, PNG or PDF, up to 5 MB. Files are stored privately and only seen by our compliance team.</p>
+              </div>
+              <Button type="submit" className="w-full" loading={submit.isPending} disabled={needed.some((k) => !docs[k]) || !!uploading}>Submit for verification</Button>
             </form>
           )}
           {subs.data && subs.data.filter((s) => s.status !== "pending").length > 0 && (
@@ -659,6 +697,13 @@ export function VerificationPage() {
     </>
   );
 }
+
+const DOC_KINDS: [string, string][] = [
+  ["id_front", "ID card — front"],
+  ["id_back", "ID card — back"],
+  ["selfie", "Selfie holding your ID"],
+  ["proof_of_address", "Proof of address (utility bill / bank statement)"],
+];
 
 // ------------------------------------------------------------------ security
 export function SecurityPage() {

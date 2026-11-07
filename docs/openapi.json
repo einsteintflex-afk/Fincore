@@ -239,11 +239,18 @@
      "content": {
       "application/json": {
        "schema": {
-        "$ref": "#/components/schemas/RefreshIn"
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/RefreshIn"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Body"
        }
       }
-     },
-     "required": true
+     }
     },
     "responses": {
      "200": {
@@ -951,6 +958,70 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/KycOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/me/kyc/documents": {
+   "get": {
+    "tags": [
+     "My account"
+    ],
+    "summary": "My Kyc Documents",
+    "operationId": "my_kyc_documents_api_v1_me_kyc_documents_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/KycDocumentOut"
+         },
+         "type": "array",
+         "title": "Response My Kyc Documents Api V1 Me Kyc Documents Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "My account"
+    ],
+    "summary": "Upload Kyc Document",
+    "operationId": "upload_kyc_document_api_v1_me_kyc_documents_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_upload_kyc_document_api_v1_me_kyc_documents_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/KycDocumentOut"
         }
        }
       }
@@ -5527,6 +5598,48 @@
     }
    }
   },
+  "/api/v1/admin/kyc/{submission_id}/documents": {
+   "get": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Kyc Documents",
+    "description": "Short-lived signed links to the submission's documents. Every access is audit-logged.",
+    "operationId": "kyc_documents_api_v1_admin_kyc__submission_id__documents_get",
+    "parameters": [
+     {
+      "name": "submission_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Submission Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/admin/kyc/{submission_id}/review": {
    "post": {
     "tags": [
@@ -7697,6 +7810,25 @@
     ],
     "title": "BeneficiaryOut"
    },
+   "Body_upload_kyc_document_api_v1_me_kyc_documents_post": {
+    "properties": {
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "file": {
+      "type": "string",
+      "format": "binary",
+      "title": "File"
+     }
+    },
+    "type": "object",
+    "required": [
+     "kind",
+     "file"
+    ],
+    "title": "Body_upload_kyc_document_api_v1_me_kyc_documents_post"
+   },
    "BusinessIn": {
     "properties": {
      "name": {
@@ -8741,6 +8873,54 @@
     "type": "object",
     "title": "HTTPValidationError"
    },
+   "KycDocumentOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "content_type": {
+      "type": "string",
+      "title": "Content Type"
+     },
+     "size_bytes": {
+      "type": "integer",
+      "title": "Size Bytes"
+     },
+     "submission_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Submission Id"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "content_type",
+     "size_bytes",
+     "submission_id",
+     "created_at"
+    ],
+    "title": "KycDocumentOut"
+   },
    "KycIn": {
     "properties": {
      "tier_requested": {
@@ -8792,16 +8972,14 @@
       ],
       "title": "Digital Address"
      },
-     "documents": {
-      "anyOf": [
-       {
-        "type": "object"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Documents"
+     "document_ids": {
+      "items": {
+       "type": "string",
+       "format": "uuid"
+      },
+      "type": "array",
+      "title": "Document Ids",
+      "default": []
      }
     },
     "type": "object",
@@ -8893,6 +9071,10 @@
       "type": "object",
       "title": "Verification Result"
      },
+     "documents": {
+      "type": "object",
+      "title": "Documents"
+     },
      "created_at": {
       "type": "string",
       "format": "date-time",
@@ -8926,6 +9108,7 @@
      "status",
      "review_note",
      "verification_result",
+     "documents",
      "created_at",
      "reviewed_at"
     ],
@@ -10249,14 +10432,18 @@
    "RefreshIn": {
     "properties": {
      "refresh_token": {
-      "type": "string",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
       "title": "Refresh Token"
      }
     },
     "type": "object",
-    "required": [
-     "refresh_token"
-    ],
     "title": "RefreshIn"
    },
    "RefundIn": {
