@@ -27,6 +27,7 @@ import { amountError, dateOnly, dateTime, maskPhone, money, NETWORKS, titleCase 
 import { useAction, useBusinesses, useGet } from "@/lib/hooks";
 import type { Business, Page, PaymentLink, PaymentRequest, Transaction, Wallet } from "@/lib/types";
 import { TransactionDetail } from "@/pages/customer/CustomerPages";
+import { useToast } from "@/components/toast";
 
 function useBiz() {
   const { bizId } = useParams();
@@ -239,6 +240,7 @@ function PaymentDetail({ p, onClose, bizId, canRefund }: { p: PaymentRequest | n
         ["Phone", maskPhone(p.customer_phone) || "—"],
         ["Channel", p.network ? NETWORKS[p.network] : titleCase(p.channel)],
         ["Your reference", p.merchant_reference],
+        ...((p.metadata?.form ?? []) as { label: string; value: string }[]).map((a) => [a.label, a.value] as [string, string]),
         ["Created", dateTime(p.created_at)],
         ["Paid", dateTime(p.paid_at)],
         ...(p.failure_reason ? [["Failure", p.failure_reason] as [string, string]] : []),
@@ -262,30 +264,100 @@ function PaymentDetail({ p, onClose, bizId, canRefund }: { p: PaymentRequest | n
 }
 
 // ------------------------------------------------------------------ links
+type FieldDraft = { label: string; type: string; required: boolean; options: string };
+const FIELD_TYPES: [string, string][] = [["text", "Text"], ["phone", "Phone number"], ["email", "Email"], ["number", "Number"], ["date", "Date"], ["select", "Choice list"]];
+
+function LinkEditor({ bizId, link, onDone }: { bizId: string; link: PaymentLink | null; onDone: () => void }) {
+  const [form, setForm] = useState({
+    title: link?.title ?? "", description: link?.description ?? "", amount: link?.amount ?? "", single_use: link?.single_use ?? false,
+    redirect_url: "",
+  });
+  const [fields, setFields] = useState<FieldDraft[]>(
+    (link?.fields ?? []).map((f: any) => ({ label: f.label, type: f.type, required: f.required, options: (f.options ?? []).join(", ") })),
+  );
+  const payloadFields = () => fields.filter((f) => f.label.trim()).map((f) => ({
+    label: f.label, type: f.type, required: f.required, options: f.type === "select" ? f.options.split(",").map((o) => o.trim()).filter(Boolean) : [],
+  }));
+  const save = useAction(() => link
+    ? api(`/businesses/${bizId}/payment-links/${link.id}`, { method: "PATCH", body: { title: form.title, description: form.description || null, amount: form.amount || null, fields: payloadFields() } })
+    : api(`/businesses/${bizId}/payment-links`, { body: { ...form, amount: form.amount || null, redirect_url: form.redirect_url || null, description: form.description || null, fields: payloadFields() } }), {
+    invalidate: [["links", bizId]], success: link ? "Payment link updated" : "Payment link created", onSuccess: onDone,
+  });
+  const setField = (i: number, patch: Partial<FieldDraft>) => setFields(fields.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  return (
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save.mutate(undefined); }}>
+      <Input label="Title (what people are paying for)" placeholder="e.g. Nursing admission form" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+      <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+      <Input label="Price in GHS (leave blank to let the payer enter an amount)" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+      <div className="rounded-lg bg-slate-50 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-medium text-slate-700">Questions the payer must answer</p>
+          <Button type="button" size="sm" variant="secondary" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setFields([...fields, { label: "", type: "text", required: true, options: "" }])}>Add question</Button>
+        </div>
+        {fields.length === 0 && <p className="text-xs text-slate-500">None yet — e.g. Full name, Programme, Index number, Phone.</p>}
+        <div className="space-y-2">
+          {fields.map((f, i) => (
+            <div key={i} className="grid grid-cols-12 items-end gap-2 rounded-md bg-white p-2 ring-1 ring-slate-200">
+              <div className="col-span-12 sm:col-span-5"><Input aria-label={`Question ${i + 1}`} placeholder="Question, e.g. Index number" value={f.label} onChange={(e) => setField(i, { label: e.target.value })} /></div>
+              <div className="col-span-6 sm:col-span-3">
+                <Select aria-label={`Answer type ${i + 1}`} value={f.type} onChange={(e) => setField(i, { type: e.target.value })}>
+                  {FIELD_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </Select>
+              </div>
+              <label className="col-span-4 flex items-center gap-1 pb-2 text-xs sm:col-span-3"><input type="checkbox" checked={f.required} onChange={(e) => setField(i, { required: e.target.checked })} /> Required</label>
+              <button type="button" className="col-span-2 pb-2 text-xs text-rose-600 sm:col-span-1" onClick={() => setFields(fields.filter((_, j) => j !== i))} aria-label="Remove question">✕</button>
+              {f.type === "select" && (
+                <div className="col-span-12"><Input placeholder="Choices separated by commas, e.g. Registered Nursing, Midwifery" value={f.options} onChange={(e) => setField(i, { options: e.target.value })} /></div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      {!link && (
+        <>
+          <Input label="Redirect URL after payment (optional)" value={form.redirect_url} onChange={(e) => setForm({ ...form, redirect_url: e.target.value })} />
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.single_use} onChange={(e) => setForm({ ...form, single_use: e.target.checked })} /> Single use</label>
+        </>
+      )}
+      <Button type="submit" className="w-full" loading={save.isPending}>{link ? "Save changes" : "Create link"}</Button>
+    </form>
+  );
+}
+
+function buttonCode(l: PaymentLink): string {
+  const label = l.amount ? `Pay ${money(l.amount)}` : "Pay now";
+  return `<a href="${window.location.origin}/pay/${l.slug}" style="display:inline-block;background:#047857;color:#ffffff;padding:12px 22px;border-radius:8px;font-family:Arial,sans-serif;font-weight:bold;text-decoration:none">${label} — ${l.title.replace(/[<>"]/g, "")}</a>`;
+}
+
 export function MerchantLinks() {
   const { bizId, can } = useBiz();
   const links = useGet<PaymentLink[]>(["links", bizId], `/businesses/${bizId}/payment-links`);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", amount: "", single_use: false, redirect_url: "" });
-  const create = useAction(() => api(`/businesses/${bizId}/payment-links`, { body: { ...form, amount: form.amount || null, redirect_url: form.redirect_url || null, description: form.description || null } }), {
-    invalidate: [["links", bizId]], success: "Payment link created", onSuccess: () => setOpen(false),
-  });
+  const [editing, setEditing] = useState<PaymentLink | "new" | null>(null);
+  const [embed, setEmbed] = useState<PaymentLink | null>(null);
+  const toast = useToast();
   const toggle = useAction((l: PaymentLink) => api(`/businesses/${bizId}/payment-links/${l.id}`, { method: "PATCH", body: { active: !l.active } }), { invalidate: [["links", bizId]] });
+  const copy = (text: string, what: string) => { navigator.clipboard?.writeText(text); toast.success(`${what} copied`); };
   return (
     <>
-      <PageHeader title="Payment links" subtitle="Shareable links to collect payments — no website needed." actions={can("payments:create") && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>New link</Button>} />
+      <PageHeader title="Payment links" subtitle="A link or button for each fee or product — paste it into your website, WhatsApp or SMS."
+        actions={can("payments:create") && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>New link</Button>} />
       <Card padded={false}>
-        {links.isLoading ? <Spinner /> : !links.data?.length ? <Empty title="No payment links yet" /> : (
+        {links.isLoading ? <Spinner /> : !links.data?.length ? <Empty title="No payment links yet" body="Create one for each fee, e.g. 'Admission form — GH₵150'." /> : (
           <ul className="divide-y divide-slate-100">
             {links.data.map((l) => (
               <li key={l.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="font-medium">{l.title} {!l.active && <Badge>inactive</Badge>}</p>
-                  <p className="text-sm text-slate-500">{l.amount ? money(l.amount) : "Customer enters amount"} · {l.payments_count} payments{l.single_use && " · single use"}</p>
+                  <p className="text-sm text-slate-500">
+                    {l.amount ? money(l.amount) : "Payer enters amount"} · {l.payments_count} payments
+                    {l.fields?.length ? ` · ${l.fields.length} question${l.fields.length > 1 ? "s" : ""}` : ""}{l.single_use && " · single use"}
+                  </p>
                   <p className="truncate font-mono text-xs text-brand-700">{window.location.origin}/pay/{l.slug}</p>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="secondary" icon={<Copy className="h-3.5 w-3.5" />} onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/pay/${l.slug}`)}>Copy</Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" icon={<Copy className="h-3.5 w-3.5" />} onClick={() => copy(`${window.location.origin}/pay/${l.slug}`, "Link")}>Copy link</Button>
+                  <Button size="sm" variant="secondary" onClick={() => setEmbed(l)}>Button code</Button>
+                  {can("payments:create") && <Button size="sm" variant="ghost" onClick={() => setEditing(l)}>Edit</Button>}
                   <Button size="sm" variant="ghost" onClick={() => toggle.mutate(l)}>{l.active ? "Deactivate" : "Activate"}</Button>
                 </div>
               </li>
@@ -293,15 +365,18 @@ export function MerchantLinks() {
           </ul>
         )}
       </Card>
-      <Modal open={open} onClose={() => setOpen(false)} title="New payment link">
-        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); create.mutate(undefined); }}>
-          <Input label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-          <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          <Input label="Fixed amount (leave blank to let the customer choose)" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-          <Input label="Redirect URL after payment (optional)" value={form.redirect_url} onChange={(e) => setForm({ ...form, redirect_url: e.target.value })} />
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.single_use} onChange={(e) => setForm({ ...form, single_use: e.target.checked })} /> Single use</label>
-          <Button type="submit" className="w-full" loading={create.isPending}>Create link</Button>
-        </form>
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={editing === "new" ? "New payment link" : "Edit payment link"} wide>
+        {editing && <LinkEditor key={editing === "new" ? "new" : editing.id} bizId={bizId} link={editing === "new" ? null : editing} onDone={() => setEditing(null)} />}
+      </Modal>
+      <Modal open={!!embed} onClose={() => setEmbed(null)} title="Pay button for your website" wide>
+        {embed && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">Paste this code into your website where the button should appear. It opens FinCore's secure payment page.</p>
+            <div className="rounded-lg bg-slate-50 p-4 text-center" dangerouslySetInnerHTML={{ __html: buttonCode(embed) }} />
+            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-ink-900 p-3 text-xs text-emerald-200">{buttonCode(embed)}</pre>
+            <Button className="w-full" icon={<Copy className="h-4 w-4" />} onClick={() => copy(buttonCode(embed), "Button code")}>Copy button code</Button>
+          </div>
+        )}
       </Modal>
     </>
   );

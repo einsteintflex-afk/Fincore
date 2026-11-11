@@ -27,7 +27,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.providers import route
 from app.providers.base import CollectionRequest
-from app.services import fees, limits, risk, webhooks
+from app.services import fees, forms, limits, risk, webhooks
 from app.services.audit import audit
 from app.services.ghana import NETWORK_NAMES, detect_network, normalize_msisdn
 from app.services.ledger import CR, DR, Line, SystemAccount
@@ -372,7 +372,8 @@ class PaymentService:
     # ================================================================ payment links
     def create_link(self, business: Business, actor: User, *, title: str, amount: object | None,
                     description: str | None, currency: str = "GHS", single_use: bool = False,
-                    redirect_url: str | None = None, slug: str | None = None) -> PaymentLink:
+                    redirect_url: str | None = None, slug: str | None = None,
+                    fields: list[dict] | None = None) -> PaymentLink:
         db = self.db
         amt = validate_amount(amount, currency) if amount not in (None, "") else None
         base = re.sub(r"[^a-z0-9]+", "-", (slug or title).lower()).strip("-")[:40] or "pay"
@@ -380,7 +381,8 @@ class PaymentService:
         while db.scalar(select(PaymentLink.id).where(PaymentLink.slug == candidate)):
             candidate = f"{base}-{secrets.token_hex(3)}"
         link = PaymentLink(business_id=business.id, slug=candidate, title=title, description=description, amount=amt,
-                           currency=currency, single_use=single_use, redirect_url=redirect_url)
+                           currency=currency, single_use=single_use, redirect_url=redirect_url,
+                           fields=forms.normalise_fields(fields or []))
         db.add(link)
         audit(db, "payment_link.created", actor_id=actor.id, target_type="business", target_id=business.id,
               details={"slug": candidate})
@@ -388,16 +390,20 @@ class PaymentService:
         return link
 
     def start_link_payment(self, link: PaymentLink, *, amount: object | None, customer_email: str | None,
-                           customer_name: str | None, customer_phone: str | None) -> PaymentRequest:
+                           customer_name: str | None, customer_phone: str | None,
+                           answers: dict[str, str] | None = None) -> PaymentRequest:
         if not link.active:
             raise Conflict("This payment link is no longer active", code="link_inactive")
         biz = self.db.get(Business, link.business_id)
         if link.amount is None and amount in (None, ""):
             raise ValidationFailed("Enter an amount")
+        form = forms.validate_answers(link.fields or [], answers or {})
+        typed = {a["type"]: a["value"] for a in reversed(form)}  # first phone/email answer doubles as contact
         pr = self.create_request(biz, amount=link.amount if link.amount is not None else amount,
-                                 currency=link.currency, description=link.title, customer_email=customer_email,
-                                 customer_name=customer_name, customer_phone=customer_phone, environment="live",
-                                 payment_link=link)
+                                 currency=link.currency, description=link.title,
+                                 customer_email=customer_email or typed.get("email"),
+                                 customer_name=customer_name, customer_phone=customer_phone or typed.get("phone"),
+                                 environment="live", payment_link=link, metadata={"form": form} if form else None)
         self.db.commit()
         return pr
 

@@ -18,6 +18,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from app.core.config import settings
 from app.core.money import to_api_str
+from app.services import forms
 
 BRAND = colors.HexColor("#065f46")
 INK = colors.HexColor("#0b1220")
@@ -181,6 +182,9 @@ def payment_receipt(pr, merchant_name: str, merchant_code: str, *, mask_customer
             ("Paid with", (pr.network or pr.channel or "—").replace("_", " ").upper() if pr.network else
              (pr.channel or "—").replace("_", " ").title()),
             ("Paid at", f"{pr.paid_at:%d %b %Y %H:%M} UTC" if pr.paid_at else "—")]
+    rows += [(a["label"], a["value"]) for a in (pr.meta or {}).get("form", [])]
+    rows += [("Verification code", forms.receipt_code(pr.reference)),
+             ("Verify this receipt", f"{settings.frontend_base_url}/verify")]
     if not mask_customer:
         rows += [("Fee", ghs(pr.fee, pr.currency)), ("Refunded", ghs(pr.amount_refunded, pr.currency))]
     return receipt_pdf("Payment receipt", pr.amount, pr.currency, pr.status, rows,

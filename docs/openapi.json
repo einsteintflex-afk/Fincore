@@ -5005,6 +5005,56 @@
     }
    }
   },
+  "/api/v1/verify-receipt": {
+   "get": {
+    "tags": [
+     "Checkout (public)"
+    ],
+    "summary": "Verify Receipt",
+    "description": "Public receipt check for offices: genuine only if the reference exists, was paid, and the code matches.",
+    "operationId": "verify_receipt_api_v1_verify_receipt_get",
+    "parameters": [
+     {
+      "name": "reference",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Reference"
+      }
+     },
+     {
+      "name": "code",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Code"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/pay/{slug}": {
    "get": {
     "tags": [
@@ -5383,6 +5433,46 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/Page_UserOut_"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Create User",
+    "description": "Create an account (e.g. staff while public sign-up is closed). The person sets their own password from\nan emailed link; nobody else ever knows it.",
+    "operationId": "create_user_api_v1_admin_users_post",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/StaffUserIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserOut"
         }
        }
       }
@@ -8860,6 +8950,40 @@
     ],
     "title": "FeeRuleOut"
    },
+   "FormFieldIn": {
+    "properties": {
+     "label": {
+      "type": "string",
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Label"
+     },
+     "type": {
+      "type": "string",
+      "pattern": "^(text|phone|email|number|date|select)$",
+      "title": "Type",
+      "default": "text"
+     },
+     "required": {
+      "type": "boolean",
+      "title": "Required",
+      "default": true
+     },
+     "options": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Options",
+      "default": []
+     }
+    },
+    "type": "object",
+    "required": [
+     "label"
+    ],
+    "title": "FormFieldIn"
+   },
    "FraudAlertOut": {
     "properties": {
      "id": {
@@ -9475,6 +9599,14 @@
       ],
       "title": "Amount"
      },
+     "answers": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "title": "Answers",
+      "default": {}
+     },
      "customer_email": {
       "anyOf": [
        {
@@ -9982,6 +10114,15 @@
       "minLength": 2,
       "title": "Title"
      },
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/FormFieldIn"
+      },
+      "type": "array",
+      "maxItems": 12,
+      "title": "Fields",
+      "default": []
+     },
      "description": {
       "anyOf": [
        {
@@ -10111,6 +10252,12 @@
       "type": "integer",
       "title": "Payments Count"
      },
+     "fields": {
+      "items": {},
+      "type": "array",
+      "title": "Fields",
+      "default": []
+     },
      "created_at": {
       "type": "string",
       "format": "date-time",
@@ -10156,6 +10303,35 @@
        }
       ],
       "title": "Active"
+     },
+     "amount": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Amount"
+     },
+     "fields": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/FormFieldIn"
+        },
+        "type": "array",
+        "maxItems": 12
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Fields"
      },
      "title": {
       "anyOf": [
@@ -11076,6 +11252,43 @@
      "paid_at"
     ],
     "title": "SettlementOut"
+   },
+   "StaffUserIn": {
+    "properties": {
+     "email": {
+      "type": "string",
+      "format": "email",
+      "title": "Email"
+     },
+     "full_name": {
+      "type": "string",
+      "maxLength": 200,
+      "minLength": 2,
+      "title": "Full Name"
+     },
+     "phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Phone"
+     },
+     "role": {
+      "type": "string",
+      "title": "Role",
+      "default": "customer"
+     }
+    },
+    "type": "object",
+    "required": [
+     "email",
+     "full_name"
+    ],
+    "title": "StaffUserIn"
    },
    "StatusIn": {
     "properties": {

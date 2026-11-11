@@ -9,6 +9,7 @@ None of these block continued engineering; they block **real-money operation**.
 | B-3 | AT Money API | Partner agreement + API specification + credentials | Adapter skeleton; config surface ready |
 | B-4 | Bank transfers (GhIPSS) | GhIPSS membership via a sponsor bank (or direct as a licensed PSP): institution code, API spec, credentials | Adapter skeleton; config ready |
 | B-5 | ~~Third-party gateway~~ | Not used — owner chose direct integrations (TD-019) | Paystack adapter dormant |
+| B-11 | Card payments | Card-acquiring (merchant) agreement with a Ghanaian bank (e.g. Ecobank, GCB, CalBank, Stanbic): merchant ID, API credentials, hosted payment page spec | Not started; next engineering task builds the adapter skeleton + sandbox card flow |
 | B-6 | Regulatory | Bank of Ghana licence/authorisation, trust account for float, approval of limits and fees | Kill switch keeps platform in sandbox |
 | B-7 | Identity verification | NIA/Ghana Card verification vendor contract | `IdentityVerifier` plug-in point; manual review works |
 | B-8 | Messaging | Email (e.g. SES/Mailgun) and SMS (e.g. Hubtel/mNotify/Arkesel) accounts | Outbox implemented; delivery stub logs messages |

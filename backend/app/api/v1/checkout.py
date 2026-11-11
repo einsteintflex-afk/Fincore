@@ -9,12 +9,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_user, money_movement_allowed
 from app.api.v1.wallets import pdf_response
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import NotFound
 from app.models.business import Business, PaymentLink, PaymentRequest
 from app.models.user import User
 from app.schemas.common import CheckoutPayMomoIn, CheckoutPayWalletIn, LinkPayIn
-from app.services import pdf
+from app.services import forms, pdf
 from app.services.payments import PaymentService
 
 router = APIRouter(tags=["Checkout (public)"])
@@ -33,7 +34,7 @@ def public_view(db: Session, pr: PaymentRequest) -> dict:
     return {
         "reference": pr.reference, "amount": pr.amount, "currency": pr.currency, "status": pr.status,
         "description": pr.description, "merchant_name": biz.trading_name or biz.name,
-        "merchant_code": biz.merchant_code, "livemode": pr.environment == "live",
+        "merchant_code": biz.merchant_code, "livemode": pr.environment == "live" and settings.live_payments_enabled,
         "customer_email": _mask_email(pr.customer_email), "channel": pr.channel, "failure_reason": pr.failure_reason,
         "expires_at": pr.expires_at, "paid_at": pr.paid_at,
         "redirect_url": (link.redirect_url if link else None) or pr.callback_url,
@@ -69,6 +70,25 @@ def pay_wallet(reference: str, body: CheckoutPayWalletIn, user: User = Depends(c
     return public_view(db, svc.pay_with_wallet(svc.get_request(reference), user, body.wallet_id))
 
 
+@router.get("/verify-receipt")
+def verify_receipt(reference: str, code: str, db: Session = Depends(get_db)):
+    """Public receipt check for offices: genuine only if the reference exists, was paid, and the code matches."""
+    pr = db.scalar(select(PaymentRequest).where(PaymentRequest.reference == reference.strip().upper()))
+    if not pr or not forms.check_receipt_code(pr.reference, code):
+        return {"valid": False, "message": "No genuine FinCore receipt matches this reference and code."}
+    biz = db.get(Business, pr.business_id)
+    paid = pr.status in ("successful", "partially_refunded")
+    return {
+        "valid": paid,
+        "message": "Genuine and paid." if paid else f"Receipt found but the payment is {pr.status.replace('_', ' ')}.",
+        "reference": pr.reference, "status": pr.status, "amount": pr.amount, "currency": pr.currency,
+        "amount_refunded": pr.amount_refunded, "paid_at": pr.paid_at, "description": pr.description,
+        "merchant_name": biz.trading_name or biz.name, "payer_name": pr.customer_name,
+        "form": [{"label": a["label"], "value": a["value"]} for a in (pr.meta or {}).get("form", [])],
+        "livemode": pr.environment == "live" and settings.live_payments_enabled,
+    }
+
+
 @router.get("/pay/{slug}")
 def get_link(slug: str, db: Session = Depends(get_db)):
     link = db.scalar(select(PaymentLink).where(PaymentLink.slug == slug))
@@ -77,7 +97,8 @@ def get_link(slug: str, db: Session = Depends(get_db)):
     biz = db.get(Business, link.business_id)
     return {"slug": link.slug, "title": link.title, "description": link.description, "amount": link.amount,
             "currency": link.currency, "active": link.active and biz.status == "active",
-            "merchant_name": biz.trading_name or biz.name}
+            "merchant_name": biz.trading_name or biz.name,
+            "fields": [{k: f[k] for k in ("key", "label", "type", "required", "options")} for f in link.fields or []]}
 
 
 @router.post("/pay/{slug}")
@@ -86,5 +107,6 @@ def start_link_payment(slug: str, body: LinkPayIn, db: Session = Depends(get_db)
     if not link:
         raise NotFound("Payment link not found")
     pr = PaymentService(db).start_link_payment(link, amount=body.amount, customer_email=body.customer_email,
-                                               customer_name=body.customer_name, customer_phone=body.customer_phone)
+                                               customer_name=body.customer_name, customer_phone=body.customer_phone,
+                                               answers=body.answers)
     return public_view(db, pr)

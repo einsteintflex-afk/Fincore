@@ -15,6 +15,7 @@ from app.api.v1.wallets import pdf_response, txn_out, wallet_out
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import NotFound
+from app.core.money import validate_amount
 from app.models.business import BusinessMember, PaymentLink, PaymentRequest, Refund, Settlement
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -39,8 +40,9 @@ from app.schemas.common import (
     TransactionOut,
     WalletOut,
 )
-from app.services import analytics, pdf
+from app.services import analytics, forms, pdf
 from app.services import business as bsvc
+from app.services.audit import audit
 from app.services.payments import PaymentService
 from app.services.reconciliation import settlement_report
 from app.services.wallets import business_wallets
@@ -294,7 +296,8 @@ def create_link(business_id: uuid.UUID, body: PaymentLinkIn, user: User = Depend
     b = bsvc.require_permission(db, user, business_id, "payments:create")
     link = PaymentService(db).create_link(b, user, title=body.title, amount=body.amount, description=body.description,
                                           currency=body.currency, single_use=body.single_use,
-                                          redirect_url=body.redirect_url, slug=body.slug)
+                                          redirect_url=body.redirect_url, slug=body.slug,
+                                          fields=[f.model_dump() for f in body.fields])
     return link_out(link)
 
 
@@ -312,7 +315,14 @@ def update_link(business_id: uuid.UUID, link_id: uuid.UUID, body: PaymentLinkUpd
     link = db.get(PaymentLink, link_id)
     if not link or link.business_id != business_id:
         raise NotFound("Payment link not found")
-    for k, v in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_none=True)
+    if "fields" in data:
+        data["fields"] = forms.normalise_fields(data["fields"])
+    if "amount" in data:
+        data["amount"] = validate_amount(data["amount"], link.currency)
+    for k, v in data.items():
         setattr(link, k, v)
+    audit(db, "payment_link.updated", actor_id=user.id, target_type="business", target_id=business_id,
+          details={"slug": link.slug, "changes": list(data)})
     db.commit()
     return link_out(link)

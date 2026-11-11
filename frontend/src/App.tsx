@@ -38,6 +38,7 @@ export default function App() {
       <Route path="/verify-email" element={<Auth.VerifyEmailPage />} />
       <Route path="/checkout/:reference" element={<P.CheckoutPage />} />
       <Route path="/pay/:slug" element={<P.PaymentLinkPage />} />
+      <Route path="/verify" element={<P.VerifyReceiptPage />} />
 
       <Route path="/app" element={<RequireAuth><AppShell portal="app" /></RequireAuth>}>
         <Route index element={<C.CustomerDashboard />} />

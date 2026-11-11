@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 — 2026-11-11 (session 3)
+
+### Added
+- Private mode (`python -m app.cli private-mode on|off`): public sign-up closed, private landing page,
+  admins create user/staff accounts (password set by the person via an emailed link).
+- Payment links with custom payer questions (text, phone, email, number, date, choice list), editable price
+  and questions, answers stored on the payment and printed on receipts.
+- Receipt verification: every receipt carries a verification code; offices check it at `/verify`
+  (genuine/paid, payer, answers). Forged codes are rejected.
+- "Button code" for each payment link to paste a pay button into any website.
+- `frontend/e2e/private_links.cjs` browser test.
+
+### Fixed
+- Checkout/verify pages showed "live" for real merchant links while the platform is still in test mode.
+
 ## 0.3.0 — 2026-11-07 (session 2)
 
 ### Added

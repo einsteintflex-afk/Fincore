@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react
 import { Alert, Button, Input } from "@/components/ui";
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
+import { usePlatform } from "@/lib/hooks";
 
 function AuthCard({ title, subtitle, children, footer }: { title: string; subtitle?: string; children: ReactNode; footer?: ReactNode }) {
   return (
@@ -39,6 +40,7 @@ function AuthCard({ title, subtitle, children, footer }: { title: string; subtit
 export function LoginPage() {
   const { user, login, completeTwoFactor } = useAuth();
   const loc = useLocation() as { state?: { from?: string } };
+  const platform = usePlatform();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [challenge, setChallenge] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export function LoginPage() {
     <AuthCard
       title={challenge ? "Two-factor authentication" : "Welcome back"}
       subtitle={challenge ? "Enter the 6-digit code from your authenticator app." : "Sign in to your FinCore account."}
-      footer={!challenge && <>New to FinCore? <Link className="font-medium text-brand-700" to="/register">Create an account</Link></>}
+      footer={!challenge && platform.data?.signup_enabled !== false && <>New to FinCore? <Link className="font-medium text-brand-700" to="/register">Create an account</Link></>}
     >
       <form onSubmit={submit} className="space-y-4">
         {error && <Alert tone="error">{error}</Alert>}
@@ -99,6 +101,17 @@ export function LoginPage() {
 }
 
 export function RegisterPage() {
+  const platform = usePlatform();
+  if (platform.data?.signup_enabled === false)
+    return (
+      <AuthCard title="Sign-up is closed" footer={<Link to="/login" className="text-brand-700">Sign in</Link>}>
+        <Alert tone="info">This is a private FinCore. Ask the owner to create an account for you.</Alert>
+      </AuthCard>
+    );
+  return <RegisterForm />;
+}
+
+function RegisterForm() {
   const { login } = useAuth();
   const nav = useNavigate();
   const [form, setForm] = useState({ full_name: "", email: "", phone: "", password: "" });

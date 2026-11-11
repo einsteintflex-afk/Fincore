@@ -104,7 +104,7 @@ export function AdminUsers() {
   const q = useGet<Page<User>>(["admin-users", page, search, status], "/admin/users", { page, search, status });
   return (
     <>
-      <PageHeader title="Customers" />
+      <PageHeader title="Users" actions={<AddUserButton />} />
       <Card>
         <div className="mb-4 grid gap-3 sm:grid-cols-3">
           <Input placeholder="Search name, email or phone" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
@@ -195,6 +195,32 @@ export function AdminUserDetail() {
       <Card title="Recent transactions" className="mt-6">
         {d.recent_transactions.length ? <AdminTxnTable rows={d.recent_transactions} /> : <Empty title="No transactions" />}
       </Card>
+    </>
+  );
+}
+
+function AddUserButton() {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ email: "", full_name: "", phone: "", role: "finance" });
+  const add = useAction(() => api("/admin/users", { body: { ...f, phone: f.phone || null } }), {
+    invalidate: [["admin-users"]], success: "Account created — they'll get an email to set their password",
+    onSuccess: () => { setOpen(false); setF({ email: "", full_name: "", phone: "", role: "finance" }); },
+  });
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>Add user</Button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Add a user">
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); add.mutate(undefined); }}>
+          <Input label="Full name" value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} required />
+          <Input label="Email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
+          <Input label="Phone (optional)" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+          <Select label="Role" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>
+            {[["finance", "Finance — payments, refunds, payouts, reports"], ["support", "Support — view and help payers"], ["compliance", "Compliance — reviews and fraud"], ["admin", "Admin — everything except roles"], ["customer", "Regular user"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </Select>
+          <p className="text-xs text-slate-500">They receive an email link to choose their own password. Nobody else ever sees it.</p>
+          <Button type="submit" className="w-full" loading={add.isPending}>Create account</Button>
+        </form>
+      </Modal>
     </>
   );
 }

@@ -78,3 +78,12 @@ an aggregator such as Paystack. The Paystack adapter stays in the codebase but i
 go-live depends on a Bank of Ghana PSP/EMI licence and a direct agreement with each network and a GhIPSS
 sponsor bank (or direct GhIPSS membership), because those operators only open their APIs to contracted,
 licensed partners.
+
+**TD-020 Private deployment for the owner's own sites (owner decision, 2026-11-11).** FinCore runs as the
+owner's private payment system for his own websites/apps (nursing studies, healthcare registration, admission
+fees, a mini market) rather than as a public wallet. Private mode (`python -m app.cli private-mode on`) closes
+public sign-up; staff accounts are created by an admin and set their own password from an emailed link. Payers
+never need a FinCore account: they pay through payment links (with custom questions) or the gateway API, by
+mobile money and, once an acquiring bank is contracted, cards. Receipts carry an HMAC verification code that
+offices check on the public `/verify` page. Customer-wallet features remain in the codebase but are not the
+focus.

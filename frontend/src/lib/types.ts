@@ -110,6 +110,7 @@ export interface PaymentLink {
   active: boolean;
   single_use: boolean;
   payments_count: number;
+  fields: { key: string; label: string; type: string; required: boolean; options: string[] }[];
   created_at: string;
   url: string;
 }
@@ -129,4 +130,5 @@ export interface Platform {
   live_payments_enabled: boolean;
   maintenance: { enabled: boolean; message?: string };
   support: { email?: string; phone?: string };
+  signup_enabled?: boolean;
 }

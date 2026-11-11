@@ -369,8 +369,16 @@ class PaymentRequestOut(ORM):
     checkout_url: str | None = None
 
 
+class FormFieldIn(BaseModel):
+    label: str = Field(min_length=1, max_length=80)
+    type: str = Field(default="text", pattern="^(text|phone|email|number|date|select)$")
+    required: bool = True
+    options: list[str] = []
+
+
 class PaymentLinkIn(BaseModel):
     title: str = Field(min_length=2, max_length=200)
+    fields: list[FormFieldIn] = Field(default=[], max_length=12)
     description: str | None = None
     amount: Money | None = None
     currency: str = "GHS"
@@ -381,6 +389,8 @@ class PaymentLinkIn(BaseModel):
 
 class PaymentLinkUpdateIn(BaseModel):
     active: bool | None = None
+    amount: Money | None = None
+    fields: list[FormFieldIn] | None = Field(default=None, max_length=12)
     title: str | None = None
     description: str | None = None
 
@@ -396,6 +406,7 @@ class PaymentLinkOut(ORM):
     single_use: bool
     redirect_url: str | None
     payments_count: int
+    fields: list = []
     created_at: datetime
     url: str | None = None
 
@@ -443,6 +454,7 @@ class CheckoutPayWalletIn(BaseModel):
 
 class LinkPayIn(BaseModel):
     amount: Money | None = None
+    answers: dict[str, str] = {}
     customer_email: EmailStr | None = None
     customer_name: str | None = None
     customer_phone: str | None = None
@@ -733,3 +745,10 @@ class KycDocumentOut(ORM):
     size_bytes: int
     submission_id: uuid.UUID | None
     created_at: datetime
+
+
+class StaffUserIn(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=200)
+    phone: str | None = None
+    role: str = "customer"

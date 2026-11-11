@@ -57,6 +57,9 @@ class PaymentLink(UUIDPk, Timestamps, Base):
     single_use: Mapped[bool] = mapped_column(Boolean, default=False)
     redirect_url: Mapped[str | None] = mapped_column(String(500))
     payments_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Questions the payer answers before paying, e.g. [{"key": "index_number", "label": "Index number",
+    # "type": "text", "required": true}]. Answers are stored on the payment and printed on the receipt.
+    fields: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
 
 
 class PaymentRequest(UUIDPk, Timestamps, Base):

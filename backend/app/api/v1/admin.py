@@ -10,6 +10,7 @@ Role guide:
 
 from __future__ import annotations
 
+import secrets
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -25,7 +26,7 @@ from app.api.v1.wallets import txn_out, wallet_out
 from app.core import cache
 from app.core.config import settings
 from app.core.database import get_db, utcnow
-from app.core.errors import Conflict, NotFound, ValidationFailed
+from app.core.errors import Conflict, Forbidden, NotFound, ValidationFailed
 from app.core.money import validate_amount
 from app.models.business import Business, PaymentRequest
 from app.models.enums import RestrictionType, UserRole, UserStatus
@@ -61,6 +62,7 @@ from app.schemas.common import (
     ReviewIn,
     RoleIn,
     SettingIn,
+    StaffUserIn,
     StatusIn,
     TicketMessageIn,
     TicketMessageOut,
@@ -70,6 +72,7 @@ from app.schemas.common import (
     UserOut,
 )
 from app.services import aml, analytics, approvals, kyc, reconciliation
+from app.services import auth as auth_svc
 from app.services import business as bsvc
 from app.services.audit import audit
 from app.services.auth import revoke_all_sessions
@@ -132,6 +135,23 @@ def users(page: int = Query(1, ge=1), page_size: int = Query(20, le=100), search
     if kyc_tier is not None:
         q = q.where(User.kyc_tier == kyc_tier)
     return _page(db, q, page, page_size, User.created_at.desc())
+
+
+@router.post("/users", response_model=UserOut, status_code=201)
+def create_user(body: StaffUserIn, staff: User = Depends(admin_only), db: Session = Depends(get_db)):
+    """Create an account (e.g. staff while public sign-up is closed). The person sets their own password from
+    an emailed link; nobody else ever knows it."""
+    if body.role not in {r.value for r in UserRole}:
+        raise ValidationFailed("Unknown role")
+    if body.role == UserRole.SUPER_ADMIN and staff.role != UserRole.SUPER_ADMIN:
+        raise Forbidden("Only a super admin can create super admins")
+    user = auth_svc.register(db, email=body.email, password="Tmp!" + secrets.token_urlsafe(24) + "aA1",
+                             full_name=body.full_name, phone=body.phone, role=UserRole(body.role))
+    auth_svc.request_password_reset(db, user.email)
+    audit(db, "user.created_by_staff", actor_id=staff.id, actor_type="staff", target_type="user", target_id=user.id,
+          details={"role": body.role})
+    db.commit()
+    return user
 
 
 @router.get("/users/{user_id}")

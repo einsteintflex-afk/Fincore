@@ -4,6 +4,7 @@
     python -m app.cli create-admin EMAIL NAME    # prompts for password (or FINCORE_ADMIN_PASSWORD)
     python -m app.cli demo-data                  # sample customers + merchant (development only)
     python -m app.cli reconcile                  # ledger integrity + provider reconciliation
+    python -m app.cli private-mode on|off        # close/open public sign-up
     python -m app.cli worker                     # webhook delivery + provider status polling loop
 """
 
@@ -90,6 +91,18 @@ def cmd_demo_data(_: argparse.Namespace) -> None:
         print("  admin@fincore.demo (super admin), ama@fincore.demo (customer), kofi@fincore.demo (merchant owner)")
 
 
+def cmd_private_mode(args: argparse.Namespace) -> None:
+    """Private mode = public sign-up closed. Staff accounts are then created from the admin console."""
+    from app.models.ops import SystemSetting
+
+    with SessionLocal() as db:
+        s = db.get(SystemSetting, "signup_enabled") or SystemSetting(key="signup_enabled", value={})
+        s.value = {"enabled": args.state == "off"}
+        db.merge(s)
+        db.commit()
+    print(f"Private mode {args.state}: public sign-up {'closed' if args.state == 'on' else 'open'}")
+
+
 def cmd_reconcile(_: argparse.Namespace) -> None:
     with SessionLocal() as db:
         ledger = reconciliation.run_ledger_integrity(db)
@@ -115,6 +128,9 @@ def main(argv: list[str] | None = None) -> None:
     a.set_defaults(fn=cmd_create_admin)
     sub.add_parser("demo-data").set_defaults(fn=cmd_demo_data)
     sub.add_parser("reconcile").set_defaults(fn=cmd_reconcile)
+    pm = sub.add_parser("private-mode")
+    pm.add_argument("state", choices=["on", "off"])
+    pm.set_defaults(fn=cmd_private_mode)
     w = sub.add_parser("worker")
     w.add_argument("--interval", type=float, default=5.0)
     w.add_argument("--once", action="store_true")

@@ -1,6 +1,8 @@
 # Project status
 
-_Last updated: 2026-11-07 (session 2)_
+_Last updated: 2026-11-11 (session 3)_
+
+**Direction (TD-020):** private payment system for the owner's own sites (Nurses Hub etc.), MoMo + card, direct integrations (TD-019).
 
 **Overall:** Phase 1 (foundation) and Phase 2 (core product) are built and verified in sandbox mode.
 No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production provider credentials exist.
@@ -8,7 +10,7 @@ No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production 
 ## Verified state (re-run these to confirm)
 | Check | Command | Last result |
 |---|---|---|
-| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 128 passed |
+| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 133 passed |
 | Backend lint | `../.venv/bin/ruff check app tests` | clean |
 | Migrations match models | `../.venv/bin/alembic upgrade head && ../.venv/bin/alembic check` | no drift |
 | Frontend typecheck/build | `cd frontend && npm run build` | ok (initial JS ≈ 85 KB gz) |
@@ -19,6 +21,7 @@ No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production 
 | Browser KYC documents flow | `node frontend/e2e/kyc.cjs <dir>` | upload → submit → reviewer previews → approve |
 | Browser PDF downloads | statement + receipt buttons | both return valid PDFs |
 | Browser settlement-file reconciliation | upload CSV with a wrong amount | discrepancy shown, links to the transaction |
+| Browser private-mode payment link flow | `node frontend/e2e/private_links.cjs <dir>` | private landing → link with questions → payer pays → receipt verified |
 | Load test | `python backend/scripts/loadtest.py` | 400/400 ok, ~71–76 req/s (4-core box), ledger balanced |
 
 ## Module status

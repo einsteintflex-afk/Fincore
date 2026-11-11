@@ -48,6 +48,7 @@ def platform(db: Session = Depends(get_db)):
         "maintenance": maint.value if maint else {"enabled": False},
         "support": support.value if support else {},
         "investments_enabled": settings.investments_enabled,
+        "signup_enabled": (db.get(SystemSetting, "signup_enabled") or SystemSetting(value={"enabled": True})).value.get("enabled", True),
     }
 
 

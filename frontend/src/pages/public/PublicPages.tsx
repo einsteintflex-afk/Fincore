@@ -1,15 +1,17 @@
 import { ArrowRight, Building2, CheckCircle2, Code2, Lock, ShieldCheck, Smartphone, Wallet, XCircle } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SandboxBanner } from "@/components/Layout";
-import { Alert, Badge, Button, ErrorState, Input, Spinner } from "@/components/ui";
+import { Alert, Badge, Button, ErrorState, Input, Select, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { amountError, detectNetwork, money, NETWORKS } from "@/lib/format";
-import { useGet, useWallets } from "@/lib/hooks";
+import { useGet, usePlatform, useWallets } from "@/lib/hooks";
 
 export function LandingPage() {
   const { user } = useAuth();
+  const platform = usePlatform();
+  if (platform.data && platform.data.signup_enabled === false) return <PrivateLanding signedIn={!!user} />;
   const features = [
     { icon: <Wallet />, title: "GHS wallets", body: "Instant wallet-to-wallet transfers, statements and beneficiaries." },
     { icon: <Smartphone />, title: "Mobile money", body: "Top up from and cash out to MTN MoMo, Telecel Cash and AT Money." },
@@ -68,6 +70,66 @@ export function LandingPage() {
   );
 }
 
+function PrivateLanding({ signedIn }: { signedIn: boolean }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-brand-950 to-ink-900 px-4 text-center text-white">
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-700 text-2xl font-bold text-gold-400">F</span>
+      <h1 className="mt-5 text-3xl font-semibold">FinCore</h1>
+      <p className="mt-2 max-w-sm text-brand-100">Private payment system. Authorised staff only.</p>
+      <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <Link to={signedIn ? "/merchant" : "/login"}><Button variant="gold" size="lg">{signedIn ? "Open dashboard" : "Sign in"}</Button></Link>
+        <Link to="/verify"><Button variant="secondary" size="lg">Verify a receipt</Button></Link>
+      </div>
+    </div>
+  );
+}
+
+export function VerifyReceiptPage() {
+  const [params] = useSearchParams();
+  const [form, setForm] = useState({ reference: params.get("reference") ?? "", code: params.get("code") ?? "" });
+  const [result, setResult] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  async function check(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      setResult(await api("/verify-receipt", { query: form }));
+    } catch (ex) {
+      setResult({ valid: false, message: (ex as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <CheckoutShell heading="Receipt verification">
+      <div className="p-6">
+        <h1 className="text-lg font-semibold">Verify a receipt</h1>
+        <p className="mt-1 text-sm text-slate-500">Enter the reference and verification code printed on the receipt.</p>
+        <form onSubmit={check} className="mt-5 space-y-4">
+          <Input label="Reference" placeholder="PAY-20261111-…" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} required />
+          <Input label="Verification code" placeholder="ABCDE-FGHIJ" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />
+          <Button type="submit" className="w-full" loading={busy}>Check receipt</Button>
+        </form>
+        {result && (
+          <div className="mt-5">
+            <Alert tone={result.valid ? "success" : "error"}>{result.message}</Alert>
+            {result.reference && (
+              <dl className="mt-3 divide-y divide-slate-100 text-sm">
+                {[["Paid to", result.merchant_name], ["For", result.description], ["Amount", money(result.amount, result.currency)],
+                  ["Payer", result.payer_name], ["Paid on", result.paid_at ? new Date(result.paid_at).toLocaleString("en-GH") : "—"],
+                  ...(result.form ?? []).map((a: any) => [a.label, a.value]),
+                  ...(result.livemode ? [] : [["Note", "Test (sandbox) payment — not real money"]])].map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-4 py-2"><dt className="text-slate-500">{k}</dt><dd className="text-right font-medium">{v ?? "—"}</dd></div>
+                ))}
+              </dl>
+            )}
+          </div>
+        )}
+      </div>
+    </CheckoutShell>
+  );
+}
+
 interface CheckoutView {
   reference: string;
   amount: string;
@@ -80,12 +142,12 @@ interface CheckoutView {
   redirect_url: string | null;
 }
 
-function CheckoutShell({ children, merchant }: { children: React.ReactNode; merchant?: string }) {
+function CheckoutShell({ children, merchant, heading }: { children: React.ReactNode; merchant?: string; heading?: string }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-brand-950 to-ink-900 px-4 py-10">
       <div className="mx-auto max-w-md">
         <div className="mb-6 text-center text-white">
-          <p className="text-sm text-brand-200">Pay {merchant ?? "merchant"}</p>
+          <p className="text-sm text-brand-200">{heading ?? `Pay ${merchant ?? "merchant"}`}</p>
         </div>
         <div className="overflow-hidden rounded-2xl bg-white shadow-2xl">{children}</div>
         <p className="mt-6 flex items-center justify-center gap-1 text-xs text-brand-200">
@@ -201,6 +263,7 @@ export function PaymentLinkPage() {
   const nav = useNavigate();
   const { data, isLoading, error } = useGet<any>(["link", slug], `/pay/${slug}`);
   const [form, setForm] = useState({ amount: "", customer_name: "", customer_email: "" });
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (isLoading) return <CheckoutShell><Spinner /></CheckoutShell>;
@@ -213,7 +276,7 @@ export function PaymentLinkPage() {
     }
     setBusy(true);
     try {
-      const pr = await api(`/pay/${slug}`, { body: { ...form, amount: data.amount ? null : form.amount, customer_email: form.customer_email || null } });
+      const pr = await api(`/pay/${slug}`, { body: { ...form, answers, amount: data.amount ? null : form.amount, customer_email: form.customer_email || null } });
       nav(`/checkout/${pr.reference}`);
     } catch (ex) {
       setErr((ex as Error).message);
@@ -236,7 +299,21 @@ export function PaymentLinkPage() {
             ) : (
               <Input label="Amount (GHS)" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
             )}
-            <Input label="Your name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
+            <Input label="Your name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} required={!!data.fields?.length} />
+            {(data.fields ?? []).map((f: any) => {
+              const label = f.label + (f.required ? "" : " (optional)");
+              const set = (v: string) => setAnswers({ ...answers, [f.key]: v });
+              return f.type === "select" ? (
+                <Select key={f.key} label={label} value={answers[f.key] ?? ""} onChange={(e) => set(e.target.value)} required={f.required}>
+                  <option value="">Choose…</option>
+                  {f.options.map((o: string) => <option key={o} value={o}>{o}</option>)}
+                </Select>
+              ) : (
+                <Input key={f.key} label={label} required={f.required} value={answers[f.key] ?? ""} onChange={(e) => set(e.target.value)}
+                  type={f.type === "email" ? "email" : f.type === "date" ? "date" : "text"}
+                  inputMode={f.type === "phone" ? "tel" : f.type === "number" ? "decimal" : undefined} />
+              );
+            })}
             <Input label="Email (for receipt)" type="email" value={form.customer_email} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} />
             <Button type="submit" size="lg" className="w-full" loading={busy}>Continue to payment</Button>
           </form>
