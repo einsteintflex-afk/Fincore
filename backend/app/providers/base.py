@@ -38,6 +38,7 @@ class DisbursementRequest:
     account_number: str | None = None
     account_name: str | None = None
     description: str = ""
+    original_reference: str | None = None  # card refunds: the acquirer's reference of the original payment
 
 
 @dataclass

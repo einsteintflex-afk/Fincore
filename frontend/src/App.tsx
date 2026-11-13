@@ -39,6 +39,7 @@ export default function App() {
       <Route path="/checkout/:reference" element={<P.CheckoutPage />} />
       <Route path="/pay/:slug" element={<P.PaymentLinkPage />} />
       <Route path="/verify" element={<P.VerifyReceiptPage />} />
+      <Route path="/sandbox-card/:token" element={<P.SandboxCardPage />} />
 
       <Route path="/app" element={<RequireAuth><AppShell portal="app" /></RequireAuth>}>
         <Route index element={<C.CustomerDashboard />} />

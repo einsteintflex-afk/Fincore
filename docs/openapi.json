@@ -5005,6 +5005,227 @@
     }
    }
   },
+  "/api/v1/checkout/{reference}/card": {
+   "post": {
+    "tags": [
+     "Checkout (public)"
+    ],
+    "summary": "Pay Card",
+    "description": "Start a card payment: returns the acquirer's hosted card page to redirect the payer to.",
+    "operationId": "pay_card_api_v1_checkout__reference__card_post",
+    "parameters": [
+     {
+      "name": "reference",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Reference"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/checkout/{reference}/card/complete": {
+   "post": {
+    "tags": [
+     "Checkout (public)"
+    ],
+    "summary": "Complete Card",
+    "description": "Called when the payer returns from the card page. The outcome comes from the acquirer, not the browser.",
+    "operationId": "complete_card_api_v1_checkout__reference__card_complete_post",
+    "parameters": [
+     {
+      "name": "reference",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Reference"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/sandbox/card/{token}": {
+   "get": {
+    "tags": [
+     "Checkout (public)"
+    ],
+    "summary": "Sandbox Card Page",
+    "operationId": "sandbox_card_page_api_v1_sandbox_card__token__get",
+    "parameters": [
+     {
+      "name": "token",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Token"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Checkout (public)"
+    ],
+    "summary": "Sandbox Card Submit",
+    "description": "Simulated acquirer page. Only the brand and last four digits are kept; the number is discarded.",
+    "operationId": "sandbox_card_submit_api_v1_sandbox_card__token__post",
+    "parameters": [
+     {
+      "name": "token",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Token"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SandboxCardIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/sandbox/card/{token}/3ds": {
+   "post": {
+    "tags": [
+     "Checkout (public)"
+    ],
+    "summary": "Sandbox Card 3Ds",
+    "operationId": "sandbox_card_3ds_api_v1_sandbox_card__token__3ds_post",
+    "parameters": [
+     {
+      "name": "token",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Token"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Sandbox3dsIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/verify-receipt": {
    "get": {
     "tags": [
@@ -10997,6 +11218,60 @@
      "role"
     ],
     "title": "RoleIn"
+   },
+   "Sandbox3dsIn": {
+    "properties": {
+     "approve": {
+      "type": "boolean",
+      "title": "Approve"
+     }
+    },
+    "type": "object",
+    "required": [
+     "approve"
+    ],
+    "title": "Sandbox3dsIn"
+   },
+   "SandboxCardIn": {
+    "properties": {
+     "number": {
+      "type": "string",
+      "maxLength": 23,
+      "minLength": 12,
+      "title": "Number"
+     },
+     "expiry": {
+      "type": "string",
+      "maxLength": 7,
+      "minLength": 4,
+      "title": "Expiry"
+     },
+     "cvc": {
+      "type": "string",
+      "maxLength": 4,
+      "minLength": 3,
+      "title": "Cvc"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 100
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     }
+    },
+    "type": "object",
+    "required": [
+     "number",
+     "expiry",
+     "cvc"
+    ],
+    "title": "SandboxCardIn"
    },
    "SandboxResolveIn": {
     "properties": {

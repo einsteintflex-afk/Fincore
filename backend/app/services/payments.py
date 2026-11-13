@@ -16,6 +16,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import utcnow
 from app.core.errors import AppError, Conflict, Forbidden, NotFound, ValidationFailed
 from app.core.money import ZERO, validate_amount
@@ -25,8 +26,8 @@ from app.models.enums import BusinessStatus, Channel, PaymentStatus, TxnStatus, 
 from app.models.ledger import Wallet
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.providers import route
-from app.providers.base import CollectionRequest
+from app.providers import card_acquirer, get_provider, route
+from app.providers.base import CollectionRequest, ProviderResult
 from app.services import fees, forms, limits, risk, webhooks
 from app.services.audit import audit
 from app.services.ghana import NETWORK_NAMES, detect_network, normalize_msisdn
@@ -93,6 +94,8 @@ class PaymentService:
         return pr
 
     def _assert_payable(self, pr: PaymentRequest) -> None:
+        if pr.channel == Channel.CARD and pr.status == PaymentStatus.PROCESSING:
+            self._abandon_card_attempt(pr)  # payer left the card page and is trying again (any method)
         if pr.status not in PAYABLE:
             raise Conflict(f"This payment is {pr.status}", code="not_payable")
         expires = pr.expires_at if pr.expires_at.tzinfo else pr.expires_at.replace(tzinfo=utcnow().tzinfo)
@@ -157,6 +160,8 @@ class PaymentService:
         network = detect_network(msisdn)
         sandbox = pr.environment != "live"
         provider = route(Channel.MOBILE_MONEY, network.value, sandbox=sandbox)
+        pr.fee = fees.compute_fee(db, TxnType.PAYMENT, pr.amount, pr.currency, channel=Channel.MOBILE_MONEY,
+                                  payer="merchant")
         pr.channel, pr.network, pr.customer_phone, pr.provider = Channel.MOBILE_MONEY, network.value, msisdn, provider.code
         pr.status = PaymentStatus.PROCESSING
         pr.failure_reason = None
@@ -196,6 +201,78 @@ class PaymentService:
             self._apply_sandbox_result(pr, result.status, result.message)
         db.commit()
         return pr
+
+    # ---------------------------------------------------------------- pay by card (acquirer hosted page)
+    def start_card_payment(self, pr: PaymentRequest) -> str:
+        """Create a hosted card session and return the URL to send the payer to."""
+        db = self.db
+        self._assert_payable(pr)
+        sandbox = pr.environment != "live"
+        acquirer = card_acquirer(sandbox=sandbox)
+        pr.fee = fees.compute_fee(db, TxnType.PAYMENT, pr.amount, pr.currency, channel=Channel.CARD, payer="merchant")
+        session = acquirer.create_session(
+            reference=pr.reference, amount=pr.amount, currency=pr.currency, description=pr.description or "Payment",
+            return_url=f"{settings.frontend_base_url}/checkout/{pr.reference}?card_return=1",
+            customer_email=pr.customer_email)
+        pr.channel, pr.network, pr.provider, pr.provider_reference = Channel.CARD, None, acquirer.code, session.session_id
+        pr.status, pr.failure_reason = PaymentStatus.PROCESSING, None
+        if not sandbox:
+            merchant_wallet = default_business_wallet(db, pr.business_id, pr.currency)
+            txn = Transaction(
+                reference=generate_reference("TXN"), type=TxnType.PAYMENT, status=TxnStatus.PROCESSING,
+                channel=Channel.CARD, amount=pr.amount, fee=pr.fee, currency=pr.currency,
+                destination_wallet_id=merchant_wallet.id, business_id=pr.business_id, provider=acquirer.code,
+                provider_mode=acquirer.mode, provider_reference=session.session_id, counterparty={},
+                description=pr.description or "Card payment", meta={"payment_reference": pr.reference})
+            db.add(txn)
+            db.flush()
+            pr.transaction_id = txn.id
+        db.commit()
+        return session.redirect_url
+
+    def _abandon_card_attempt(self, pr: PaymentRequest) -> None:
+        """Before a new card attempt: settle the old session if the acquirer already decided it; otherwise
+        retire it. A simulated session is failed outright. A real acquirer session is left *processing* so the
+        status poller still records it if the bank captures late (then finance refunds the duplicate)."""
+        self.complete_card_payment(pr)
+        if pr.status != PaymentStatus.PROCESSING or pr.channel != Channel.CARD:
+            return
+        old = self.db.get(Transaction, pr.transaction_id) if pr.transaction_id else None
+        if old and old.provider == "sandbox_card" and old.status == TxnStatus.PROCESSING:
+            old.status, old.failure_reason, old.completed_at = TxnStatus.FAILED, "Abandoned card attempt", utcnow()
+        pr.status, pr.failure_reason = PaymentStatus.FAILED, "Previous card attempt was not completed"
+        self.db.flush()
+
+    def apply_card_result(self, pr: PaymentRequest, status: str, message: str, *, card: dict | None = None,
+                          provider_reference: str | None = None) -> PaymentRequest:
+        """Apply an acquirer outcome (callback, status query or the simulated page). Idempotent."""
+        db = self.db
+        if card:
+            pr.meta = {**(pr.meta or {}), "card": card}
+        if pr.environment != "live":
+            if pr.status == PaymentStatus.PROCESSING:
+                self._apply_sandbox_result(pr, status, message)
+            db.commit()
+            return pr
+        txn = db.get(Transaction, pr.transaction_id) if pr.transaction_id else None
+        if txn and txn.status not in (TxnStatus.SUCCESSFUL, TxnStatus.FAILED, TxnStatus.REVERSED):
+            if card:
+                txn.counterparty = {"card": card.get("label"), "label": card.get("label")}
+            result = ProviderResult(status=status, provider_reference=provider_reference or txn.provider_reference,
+                                    message=message, raw={"card": card} if card else {})
+            _record_provider_txn(db, txn.provider, txn.provider_mode, "collection", txn, result)
+            self.txns.apply_provider_result(txn, result)  # ledger + on_transaction_final
+        db.commit()
+        return pr
+
+    def complete_card_payment(self, pr: PaymentRequest) -> PaymentRequest:
+        """Payer came back from the hosted page: ask the acquirer for the outcome (never trust the redirect)."""
+        if pr.channel != Channel.CARD or pr.status != PaymentStatus.PROCESSING or not pr.provider_reference:
+            return pr
+        result = get_provider(pr.provider).check_status(pr.provider_reference, "collection")
+        if result.status == "pending":
+            return pr
+        return self.apply_card_result(pr, result.status, result.message, provider_reference=result.provider_reference)
 
     def _apply_sandbox_result(self, pr: PaymentRequest, status: str, message: str) -> None:
         if status == "successful":
@@ -284,6 +361,31 @@ class PaymentService:
             audit(db, "payment.refunded", actor_id=actor.id if actor else None, target_type="payment",
                   target_id=pr.reference, details={"amount": amount, "refund": refund.reference})
             db.commit()
+            return refund
+
+        if pr.channel == Channel.CARD:
+            # Card refund: two-phase hold on the merchant wallet, then the acquirer refunds the original card.
+            provider = get_provider(pr.provider)
+            card = (pr.meta or {}).get("card", {})
+            txn = Transaction(
+                reference=generate_reference("RFD"), type=TxnType.REFUND, status=TxnStatus.PENDING,
+                channel=Channel.CARD, amount=amount, fee=ZERO, currency=pr.currency,
+                source_wallet_id=merchant_wallet.id, initiated_by_id=actor.id if actor else None,
+                business_id=pr.business_id, provider=provider.code, provider_mode=provider.mode,
+                related_transaction_id=original.id if original else None,
+                counterparty={"card": card.get("label"), "label": card.get("label") or "original card"},
+                description=f"Refund {pr.reference} to card",
+                meta={"payment_reference": pr.reference, "refund_reference": refund.reference,
+                      "original_provider_reference": original.provider_reference if original else None})
+            db.add(txn)
+            db.flush()
+            self.txns._hold(txn, merchant_wallet)
+            refund.transaction_id, refund.status = txn.id, "processing"
+            audit(db, "payment.refund_initiated", actor_id=actor.id if actor else None, target_type="payment",
+                  target_id=pr.reference, details={"amount": amount, "refund": refund.reference, "channel": "card"})
+            db.commit()
+            self.txns._send_payout(txn)
+            db.refresh(refund)
             return refund
 
         # Mobile money refund: two-phase payout from the merchant wallet back to the payer's number.

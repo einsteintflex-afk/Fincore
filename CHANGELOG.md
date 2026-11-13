@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0 — 2026-11-13 (session 4)
+
+### Added
+- Card payments via an acquiring bank's hosted page: card option on checkout, result confirmed with the
+  acquirer on return, card refunds back to the original card (two-phase hold), 2.5% card MDR rule.
+- Simulated acquirer for test mode with test cards, 3-D Secure step, decline/insufficient-funds outcomes.
+- Slot for the owner's acquiring bank (`bank_card`) with configuration placeholders.
+- Abandoned card attempts: payer can retry with any method; the worker retires card sessions left unfinished
+  for 35 minutes.
+
+### Fixed
+- Masked card numbers rendered as empty boxes in PDFs (standard fonts lack the bullet glyph).
+
 ## 0.4.0 — 2026-11-11 (session 3)
 
 ### Added

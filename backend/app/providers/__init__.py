@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.core.config import settings
 from app.core.errors import ValidationFailed
 from app.providers.base import PaymentProvider
+from app.providers.cards import BankCardAcquirer, CardAcquirer, SandboxCardAcquirer
 from app.providers.mtn_momo import MtnMomoProvider
 from app.providers.paystack import PaystackProvider
 from app.providers.pending import AtMoneyProvider, GhipssProvider, TelecelCashProvider
@@ -17,6 +18,8 @@ PROVIDER_CLASSES: dict[str, type[PaymentProvider]] = {
     "telecel_cash": TelecelCashProvider,
     "at_money": AtMoneyProvider,
     "ghipss": GhipssProvider,
+    "sandbox_card": SandboxCardAcquirer,
+    "bank_card": BankCardAcquirer,
 }
 
 _instances: dict[str, PaymentProvider] = {}
@@ -67,3 +70,10 @@ def provider_status() -> list[dict]:
         out.append({"code": code, "name": cls.display_name, "configured": p.is_configured(),
                     "mode": p.mode, "collection": cls.supports_collection, "disbursement": cls.supports_disbursement})
     return out
+
+
+def card_acquirer(*, sandbox: bool = False) -> CardAcquirer:
+    """Card payments: the simulated acquirer until live payments are on and a bank is configured."""
+    if sandbox or not settings.live_payments_enabled:
+        return get_provider("sandbox_card")  # type: ignore[return-value]
+    return get_provider(settings.card_acquirer)  # type: ignore[return-value]

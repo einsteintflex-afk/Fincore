@@ -86,6 +86,13 @@ class Settings(BaseSettings):
     route_telecel: str = "sandbox"
     route_at: str = "sandbox"
     route_bank: str = "sandbox"
+    card_acquirer: str = "bank_card"  # used only when live payments are enabled
+
+    # Acquiring bank for cards (from the merchant/acquiring agreement)
+    card_acquirer_base_url: str = ""
+    card_acquirer_merchant_id: str = ""
+    card_acquirer_api_key: str = ""
+    card_acquirer_webhook_secret: str = ""
 
     investments_enabled: bool = False
 

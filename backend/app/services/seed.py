@@ -23,6 +23,7 @@ FEES = [
     ("Withdrawal to mobile money", "withdrawal", "mobile_money", "customer", "0", "0.0075", "0.50", "15.00"),
     ("Withdrawal to bank", "withdrawal", "bank", "customer", "2.00", "0", "2.00", "2.00"),
     ("Merchant payment (MDR)", "payment", None, "merchant", "0", "0.0150", "0.10", "200.00"),
+    ("Merchant card payment (MDR)", "payment", "card", "merchant", "0", "0.0250", "0.20", "500.00"),
     ("Settlement to bank", "settlement", "bank", "merchant", "0", "0", "0", None),
     ("Settlement to mobile money", "settlement", "mobile_money", "merchant", "0", "0.0050", "0.50", "10.00"),
 ]

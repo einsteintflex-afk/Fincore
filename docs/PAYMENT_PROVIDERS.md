@@ -43,6 +43,23 @@ their API specification, credentials and callback signing scheme. Implement the 
 Direct GIP/GhIPSS Instant Pay access is via a sponsor bank. Needed: sponsor-bank agreement, institution
 code, API credentials and specification.
 
+## Cards (Visa / Mastercard)
+Cards are accepted through an **acquiring bank's hosted payment page** (`app/providers/cards.py`): FinCore
+creates a session, redirects the payer to the bank's page, and on return asks the bank for the result (never
+trusting the browser). FinCore never receives card numbers, keeping PCI-DSS scope to SAQ-A.
+
+| Adapter | Status |
+|---|---|
+| `sandbox_card` | **Working** – FinCore-hosted simulated card page marked TEST, used while live payments are off |
+| `bank_card` | **Slot** – implement the chosen bank's session/status/refund API once the acquiring agreement is signed |
+
+Test cards (any future expiry, any CVC): `4111 1111 1111 1111` and `5555 5555 5555 4444` approve,
+`4000 0000 0000 0002` declined, `4000 0000 0000 9995` insufficient funds, `4000 0000 0000 3220` asks for
+3-D Secure (approve or decline on the next screen). Card MDR placeholder: 2.5% (min GH₵0.20, max GH₵500).
+
+What the owner needs from the bank: merchant (acquiring) agreement, merchant ID, API credentials, the hosted
+payment page / 3-D Secure integration guide, refund API, callback signing method, and settlement account.
+
 ## Adding a provider
 1. Implement `PaymentProvider` (idempotent on our `reference`; map statuses to `successful|pending|failed`).
 2. Register it in `app/providers/__init__.py::PROVIDER_CLASSES`.

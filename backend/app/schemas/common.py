@@ -752,3 +752,14 @@ class StaffUserIn(BaseModel):
     full_name: str = Field(min_length=2, max_length=200)
     phone: str | None = None
     role: str = "customer"
+
+
+class SandboxCardIn(BaseModel):
+    number: str = Field(min_length=12, max_length=23)
+    expiry: str = Field(min_length=4, max_length=7)
+    cvc: str = Field(min_length=3, max_length=4)
+    name: str | None = Field(default=None, max_length=100)
+
+
+class Sandbox3dsIn(BaseModel):
+    approve: bool

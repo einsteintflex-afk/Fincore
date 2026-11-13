@@ -61,6 +61,29 @@ def expire_checkouts() -> int:
         return res.rowcount or 0
 
 
+CARD_SESSION_TTL = timedelta(minutes=35)  # simulated/hosted card sessions expire after 30 minutes
+
+
+def expire_card_sessions(limit: int = 100) -> int:
+    """Card attempts the payer never finished: resolve from the acquirer, or retire them."""
+    n = 0
+    with SessionLocal() as db:
+        stale = db.scalars(select(PaymentRequest).where(
+            PaymentRequest.status == PaymentStatus.PROCESSING, PaymentRequest.channel == "card",
+            PaymentRequest.updated_at < utcnow() - CARD_SESSION_TTL).limit(limit).with_for_update(skip_locked=True)).all()
+        svc = PaymentService(db)
+        for pr in stale:
+            try:
+                svc._abandon_card_attempt(pr)
+                pr.failure_reason = "Card payment was not completed in time"
+                db.commit()
+                n += 1
+            except Exception:
+                db.rollback()
+                log.exception("card session expiry failed", extra={"reference": pr.reference})
+    return n
+
+
 def drain_outbox(limit: int = 100) -> int:
     """Placeholder delivery: logs messages. Replace with SMTP / SMS gateway (see docs/OPERATIONS.md)."""
     with SessionLocal() as db:
@@ -144,7 +167,7 @@ def maybe_run_aml() -> dict | None:
 def tick(client: httpx.Client) -> dict:
     with SessionLocal() as db:
         hooks = webhooks.deliver_due(db, client)
-    return {"webhooks": hooks, "polled": poll_in_flight(), "expired": expire_checkouts(), "outbox": drain_outbox(),
+    return {"webhooks": hooks, "polled": poll_in_flight(), "expired": expire_checkouts() + expire_card_sessions(), "outbox": drain_outbox(),
             "settlements": run_scheduled_settlements(), "aml": maybe_run_aml()}
 
 

@@ -200,7 +200,7 @@ class TransactionService:
                 reference=txn.reference, amount=txn.amount, currency=txn.currency, channel=txn.channel,
                 msisdn=cp.get("msisdn"), network=cp.get("network"), bank_code=cp.get("bank_code"),
                 account_number=cp.get("account_number"), account_name=cp.get("name"),
-                description=txn.description))
+                description=txn.description, original_reference=(txn.meta or {}).get("original_provider_reference")))
         except (httpx.TimeoutException, httpx.NetworkError):
             # Outcome unknown: leave PROCESSING; the status poller / provider callback resolves it.
             log.warning("payout provider call timed out", extra={"reference": txn.reference})

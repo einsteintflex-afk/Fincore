@@ -87,8 +87,14 @@ def _build(title: str, story: list, simulated: bool) -> bytes:
     return buf.getvalue()
 
 
+def pdf_text(value: object) -> str:
+    """Standard PDF fonts lack some glyphs (e.g. the bullet in masked card numbers); swap them for safe ones."""
+    return str(value).replace("•", "*") if value is not None else ""
+
+
 def _kv_table(rows: list[tuple[str, str]]) -> Table:
-    t = Table([[Paragraph(k, SMALL), Paragraph(v or "—", BODY)] for k, v in rows], colWidths=[45 * mm, 125 * mm])
+    t = Table([[Paragraph(pdf_text(k), SMALL), Paragraph(pdf_text(v) or "—", BODY)] for k, v in rows],
+              colWidths=[45 * mm, 125 * mm])
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                            ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#e2e8f0"))]))
     return t
@@ -114,7 +120,7 @@ def statement_pdf(data: dict, account_name: str) -> bytes:
     story += [summary, Spacer(1, 6 * mm)]
     rows = [["Date", "Description", "Reference", "Debit", "Credit", "Balance"]]
     for ln in data["lines"]:
-        rows.append([f"{ln['date']:%d %b %Y}", Paragraph(str(ln["description"])[:90], BODY),
+        rows.append([f"{ln['date']:%d %b %Y}", Paragraph(pdf_text(ln["description"])[:90], BODY),
                      Paragraph(ln["reference"], SMALL),
                      ghs(ln["debit"], cur) if ln["debit"] else "", ghs(ln["credit"], cur) if ln["credit"] else "",
                      ghs(ln["balance"], cur)])
@@ -179,8 +185,8 @@ def payment_receipt(pr, merchant_name: str, merchant_code: str, *, mask_customer
     rows = [("Merchant", f"{merchant_name} ({merchant_code})"), ("Reference", pr.reference),
             ("Merchant reference", pr.merchant_reference or "—"), ("Description", pr.description or "—"),
             ("Customer", pr.customer_name or email or "—"),
-            ("Paid with", (pr.network or pr.channel or "—").replace("_", " ").upper() if pr.network else
-             (pr.channel or "—").replace("_", " ").title()),
+            ("Paid with", (pr.meta or {}).get("card", {}).get("label")
+             or ((pr.network or "").upper() + " Mobile Money" if pr.network else (pr.channel or "—").replace("_", " ").title())),
             ("Paid at", f"{pr.paid_at:%d %b %Y %H:%M} UTC" if pr.paid_at else "—")]
     rows += [(a["label"], a["value"]) for a in (pr.meta or {}).get("form", [])]
     rows += [("Verification code", forms.receipt_code(pr.reference)),

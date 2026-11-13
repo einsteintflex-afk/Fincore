@@ -1,5 +1,5 @@
 import { ArrowRight, Building2, CheckCircle2, Code2, Lock, ShieldCheck, Smartphone, Wallet, XCircle } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SandboxBanner } from "@/components/Layout";
 import { Alert, Badge, Button, ErrorState, Input, Select, Spinner } from "@/components/ui";
@@ -131,6 +131,8 @@ export function VerifyReceiptPage() {
 }
 
 interface CheckoutView {
+  channel: string | null;
+  card: string | null;
   reference: string;
   amount: string;
   currency: string;
@@ -165,7 +167,18 @@ export function CheckoutPage() {
   });
   const { user } = useAuth();
   const wallets = useWallets();
-  const [method, setMethod] = useState<"momo" | "wallet">("momo");
+  const platform = usePlatform();
+  const [method, setMethod] = useState<"momo" | "card" | "wallet">("momo");
+  const [params, setParams] = useSearchParams();
+  const returning = params.get("card_return") === "1";
+  useEffect(() => {
+    if (!returning) return;
+    // Back from the card page: ask FinCore (which asks the acquirer) for the outcome.
+    api(`/checkout/${reference}/card/complete`, { method: "POST" }).catch(() => undefined).finally(() => {
+      setParams({}, { replace: true });
+      refetch();
+    });
+  }, [returning]); // eslint-disable-line react-hooks/exhaustive-deps
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -178,6 +191,11 @@ export function CheckoutPage() {
     setErr(null);
     setBusy(true);
     try {
+      if (method === "card") {
+        const { redirect_url } = await api(`/checkout/${reference}/card`, { method: "POST" });
+        window.location.assign(redirect_url);
+        return;
+      }
       if (method === "momo") await api(`/checkout/${reference}/mobile-money`, { body: { phone } });
       else await api(`/checkout/${reference}/wallet`, { body: { wallet_id: wallets.data?.[0]?.id } });
       await refetch();
@@ -189,6 +207,8 @@ export function CheckoutPage() {
   }
 
   const done = data.status === "successful" || data.status === "refunded" || data.status === "partially_refunded";
+  const walletAllowed = platform.data?.signup_enabled !== false;
+  const cardInProgress = data.status === "processing" && data.channel === "card";
   const network = detectNetwork(phone);
   return (
     <CheckoutShell merchant={data.merchant_name}>
@@ -211,7 +231,9 @@ export function CheckoutPage() {
               {data.redirect_url && <a href={data.redirect_url}><Button>Return to merchant</Button></a>}
             </div>
           </div>
-        ) : data.status === "processing" ? (
+        ) : returning ? (
+          <Spinner label="Confirming your card payment…" />
+        ) : data.status === "processing" && !cardInProgress ? (
           <div className="text-center">
             <Smartphone className="mx-auto h-10 w-10 animate-pulse text-brand-600" />
             <p className="mt-3 font-semibold">Approve on your phone</p>
@@ -225,20 +247,23 @@ export function CheckoutPage() {
         ) : (
           <form onSubmit={pay} className="space-y-4">
             {data.status === "failed" && data.failure_reason && <Alert tone="error">Last attempt failed: {data.failure_reason}</Alert>}
+            {cardInProgress && <Alert tone="warning">Your card payment wasn't completed. You can try again or choose another method.</Alert>}
             {err && <Alert tone="error">{err}</Alert>}
-            <div className="grid grid-cols-2 gap-2">
-              {(["momo", "wallet"] as const).map((m) => (
+            <div className={`grid gap-2 ${walletAllowed ? "grid-cols-3" : "grid-cols-2"}`}>
+              {(walletAllowed ? (["momo", "card", "wallet"] as const) : (["momo", "card"] as const)).map((m) => (
                 <button
                   type="button"
                   key={m}
                   onClick={() => setMethod(m)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ring-1 ${method === m ? "bg-brand-50 text-brand-800 ring-brand-500" : "ring-slate-200"}`}
                 >
-                  {m === "momo" ? "Mobile money" : "FinCore wallet"}
+                  {m === "momo" ? "Mobile money" : m === "card" ? "Card" : "FinCore wallet"}
                 </button>
               ))}
             </div>
-            {method === "momo" ? (
+            {method === "card" ? (
+              <Alert tone="info">You'll enter your card on the bank's secure page, then come back here automatically. Visa and Mastercard accepted.</Alert>
+            ) : method === "momo" ? (
               <Input label="Mobile money number" placeholder="024 123 4567" value={phone} onChange={(e) => setPhone(e.target.value)} required
                 hint={network ? NETWORKS[network] : "MTN, Telecel or AT"} />
             ) : user ? (
@@ -333,3 +358,96 @@ export function NotFoundPage() {
   );
 }
 
+
+// ------------------------------------------------------------------ simulated acquirer card page (sandbox only)
+export function SandboxCardPage() {
+  const { token } = useParams();
+  const { data, error, isLoading } = useGet<any>(["sandbox-card", token], `/sandbox/card/${token}`);
+  const [card, setCard] = useState({ number: "", expiry: "", cvc: "", name: "" });
+  const [stage, setStage] = useState<"form" | "3ds" | "done">("form");
+  const [result, setResult] = useState<{ status: string; message: string; return_url: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (data?.awaiting_3ds) setStage("3ds");
+  }, [data?.awaiting_3ds]);
+  useEffect(() => {
+    if (stage === "done" && result) {
+      const t = setTimeout(() => window.location.assign(result.return_url), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [stage, result]);
+  if (isLoading) return <CheckoutShell heading="Card payment"><Spinner /></CheckoutShell>;
+  if (error || !data) return <CheckoutShell heading="Card payment"><div className="p-6"><ErrorState error={error} /></div></CheckoutShell>;
+
+  async function run(fn: () => Promise<any>) {
+    setErr(null);
+    setBusy(true);
+    try {
+      const r = await fn();
+      setResult(r);
+      setStage(r.status === "requires_3ds" ? "3ds" : "done");
+    } catch (ex) {
+      setErr((ex as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const fmtNumber = (v: string) => v.replace(/\D/g, "").slice(0, 19).replace(/(\d{4})(?=\d)/g, "$1 ");
+  const fmtExpiry = (v: string) => { const d = v.replace(/\D/g, "").slice(0, 4); return d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d; };
+  return (
+    <CheckoutShell heading="Secure card payment">
+      <div className="bg-gold-400 px-4 py-2 text-center text-xs font-semibold text-ink-900">TEST MODE — simulated bank card page. No real card is charged.</div>
+      <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 text-center">
+        <p className="text-sm text-slate-500">{data.merchant_name} · {data.description}</p>
+        <p className="tabular mt-1 text-3xl font-semibold">{money(data.amount, data.currency)}</p>
+      </div>
+      <div className="p-6">
+        {err && <div className="mb-3"><Alert tone="error">{err}</Alert></div>}
+        {stage === "done" && result ? (
+          <div className="text-center">
+            {result.status === "successful" ? <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" /> : <XCircle className="mx-auto h-12 w-12 text-rose-500" />}
+            <p className="mt-3 font-semibold">{result.status === "successful" ? "Payment approved" : "Payment not approved"}</p>
+            <p className="text-sm text-slate-500">{result.message}</p>
+            <p className="mt-3 text-xs text-slate-400">Returning to the merchant…</p>
+          </div>
+        ) : stage === "3ds" ? (
+          <div className="space-y-4 text-center">
+            <ShieldCheck className="mx-auto h-10 w-10 text-brand-600" />
+            <p className="font-semibold">Bank verification (test)</p>
+            <p className="text-sm text-slate-500">Your bank asks you to confirm this payment. In test mode, choose an outcome.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="danger" loading={busy} onClick={() => run(() => api(`/sandbox/card/${token}/3ds`, { body: { approve: false } }))}>Decline</Button>
+              <Button loading={busy} onClick={() => run(() => api(`/sandbox/card/${token}/3ds`, { body: { approve: true } }))}>Approve</Button>
+            </div>
+          </div>
+        ) : (
+          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); run(() => api(`/sandbox/card/${token}`, { body: card })); }}>
+            <Input label="Card number" inputMode="numeric" autoComplete="cc-number" placeholder="4111 1111 1111 1111" value={card.number}
+              onChange={(e) => setCard({ ...card, number: fmtNumber(e.target.value) })} required />
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Expiry (MM/YY)" inputMode="numeric" autoComplete="cc-exp" placeholder="12/30" value={card.expiry}
+                onChange={(e) => setCard({ ...card, expiry: fmtExpiry(e.target.value) })} required />
+              <Input label="CVC" inputMode="numeric" autoComplete="cc-csc" placeholder="123" value={card.cvc}
+                onChange={(e) => setCard({ ...card, cvc: e.target.value.replace(/\D/g, "").slice(0, 4) })} required />
+            </div>
+            <Input label="Name on card" autoComplete="cc-name" value={card.name} onChange={(e) => setCard({ ...card, name: e.target.value })} />
+            <Button type="submit" className="w-full" size="lg" loading={busy}>Pay {money(data.amount, data.currency)}</Button>
+            <details className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+              <summary className="cursor-pointer font-medium">Test cards</summary>
+              <ul className="mt-2 space-y-1 font-mono">
+                {data.test_cards.map((c: any) => (
+                  <li key={c.number}>
+                    <button type="button" className="hover:text-brand-700" onClick={() => setCard({ number: fmtNumber(c.number), expiry: "12/30", cvc: "123", name: "Test Payer" })}>
+                      {fmtNumber(c.number)} → {c.result.replace("_", " ")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </form>
+        )}
+      </div>
+    </CheckoutShell>
+  );
+}

@@ -21,6 +21,8 @@
 * Startup refuses insecure `SECRET_KEY`/missing `ENCRYPTION_KEY` in staging/production.
 * Logs are structured JSON; keys containing password/secret/token/pin/otp/code are redacted.
 * Public checkout pages mask customer emails.
+* Cards: payers enter card details only on the acquiring bank's hosted page; FinCore stores brand and last
+  four digits only (PCI-DSS SAQ-A scope). The outcome is always confirmed with the acquirer, never the browser.
 * KYC documents: private storage, unguessable keys, file type detected from content (client filename/type
   ignored), size limit, staff access only via expiring signed links, each view audit-logged.
 * Money is never handled as float (backend `Decimal`, frontend strings).
