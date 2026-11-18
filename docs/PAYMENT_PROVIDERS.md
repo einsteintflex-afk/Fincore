@@ -109,3 +109,8 @@ transaction reference (`provider_reference`/`Transaction ID`, or FinCore `refere
 a date, FinCore also lists its own successful transactions in that period that the provider file lacks
 (`missing_in_provider_file`). Add provider-specific aliases in `services/reconciliation.py::COLUMN_ALIASES`
 once each operator's real statement format is known.
+
+## Sandbox verification log
+
+- 2026-11-18: Real MTN sandbox verified 2026-11-18 after removing the environment's network secret (it was replacing the Authorization header): fresh sandbox API users for Collections and Disbursements log in (200); through FinCore's own services a GH₵100 RequestToPay deposit and a GH₵40 Transfer withdrawal (fee 6.00, net 34.00) both reached SUCCESSFUL with the ledger balanced. Fix found on the way: MTN's `CREATED` status is now treated as pending.
+  Troubleshooting: if every token call returns `500 login_failed` (even without credentials), something between FinCore and MTN is rewriting the `Authorization` header — e.g. a proxy-injected secret for the MTN host. Remove it and create fresh API users.

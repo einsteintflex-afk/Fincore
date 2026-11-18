@@ -33,10 +33,7 @@ _Last updated: 2026-11-18 (session 6). The codebase is the source of truth; re-r
 | Earlier sessions | Wallets, transfers, deposits, statements/PDFs, KYC, AML, maker-checker, settlements, refunds, reversals, payment links, checkout, card flow, reconciliation (file upload), audit log, HttpOnly refresh cookie, 2FA. |
 
 ## 3. Incomplete / not verified
-- **MTN sandbox login fails** for both Collections and Disbursement keys: MTN accepts the keys and creates API
-  users, but `POST /{product}/token/` returns `500 login_failed` — even with no credentials at all, which points at
-  this cloud environment's saved network secret for `sandbox.momodeveloper.mtn.com` overriding the `Authorization`
-  header. So **no real MTN sandbox transaction has completed yet**; all MTN tests use a stand-in API.
+- ~~MTN sandbox login~~ **resolved.** Real MTN sandbox verified 2026-11-18 after removing the environment's network secret (it was replacing the Authorization header): fresh sandbox API users for Collections and Disbursements log in (200); through FinCore's own services a GH₵100 RequestToPay deposit and a GH₵40 Transfer withdrawal (fee 6.00, net 34.00) both reached SUCCESSFUL with the ledger balanced. Fix found on the way: MTN's `CREATED` status is now treated as pending. Production approval is still required for real money.
 - iOS and macOS builds (need a Mac + Apple Developer account). Windows installer not executed on Windows; unsigned.
 - APK not run on a physical device/emulator in this session (no emulator available); it is signed and its
   manifest/contents were inspected.
@@ -78,12 +75,10 @@ Earliest active super admin became primary admin. No rows deleted. A backup was 
 Simulated vs real: every MTN test above uses a stand-in MTN API. No real MTN call has succeeded end to end.
 
 ## 9. Current errors
-- MTN sandbox `login_failed` (see §3). Everything else green.
+None known. MTN sandbox works end to end (see §3).
 
 ## 10. Missing credentials / owner actions
-- Remove the network secret "MTN MoMo Collections key (sandbox)" from the `fincore` environment (Settings →
-  environment → Network secrets) so the app's own MTN headers reach MTN; then regenerate both sandbox keys on
-  momodeveloper.mtn.com (they were pasted in chat) and put them in the server environment, not in chat.
+- Regenerate both MTN sandbox keys on momodeveloper.mtn.com (they were pasted in chat) and set them as server environment variables, not in chat.
 - MTN Ghana production approval and production Collections + Disbursement keys / API users / callback URL.
 - Hosting (domain + HTTPS), email + SMS provider, Apple Developer account + Mac (iOS/macOS), optional Windows
   code-signing certificate.
@@ -105,5 +100,4 @@ cd ../frontend && npm ci && npm run build && npm test
 ```
 
 ## 14. The single next task
-Retest MTN sandbox end to end (Collections RequestToPay and Disbursement Transfer) once the environment's network
-secret is removed and fresh keys are set in the server environment; record the real result here.
+Owner setup wizard (business name, settlement account, link templates, go-live checklist) — see CURRENT_TASK.md.

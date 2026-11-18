@@ -148,7 +148,7 @@ def test_sandbox_and_production_profiles_never_mix(monkeypatch):
 
 
 @pytest.mark.parametrize("status,reason,outcome", [
-    ("SUCCESSFUL", None, "successful"), ("PENDING", None, "pending"),
+    ("SUCCESSFUL", None, "successful"), ("PENDING", None, "pending"), ("CREATED", None, "pending"),
     ("FAILED", "APPROVAL_REJECTED", "rejected"), ("REJECTED", None, "rejected"),
     ("FAILED", "EXPIRED", "expired"), ("TIMEOUT", None, "expired"),
     ("FAILED", "NOT_ENOUGH_FUNDS", "failed"), ("FAILED", "INTERNAL_PROCESSING_ERROR", "failed"),

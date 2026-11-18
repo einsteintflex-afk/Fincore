@@ -14,11 +14,11 @@ registration, admission forms/fees, a mini market. MoMo + card. Direct integrati
       five-section dashboard, backups, Android/Windows builds (see FINCORE_MASTER_PROGRESS.md)
 
 ## Next task (start here)
-**Real MTN sandbox end-to-end test.** Owner first removes the environment network secret for
-sandbox.momodeveloper.mtn.com and sets fresh sandbox keys in the server environment
-(`FINCORE_MTN_SANDBOX_COLLECTION_*`, `FINCORE_MTN_DISBURSEMENT_PRIMARY_KEY` + `FINCORE_MTN_SANDBOX_DISBURSEMENT_API_USER/KEY`).
-Acceptance: token login 200 for both products; a RequestToPay to an MTN sandbox test number reaches SUCCESSFUL and
-credits the wallet; a Transfer reaches SUCCESSFUL and books the 15% fee; results recorded in FINCORE_MASTER_PROGRESS.md.
+**Owner setup wizard ("Get started" screen).** First sign-in of the primary admin: business name and contact,
+settlement destination (no personal collection numbers — TD-022), ready-made application/link templates
+(registration form, admission fee, study package, healthcare registration, mini-market), the API keys to copy, and a
+go-live checklist read from /console/payments. Tests (API + browser).
 
-Then: owner setup wizard (business name, settlement account, link templates, go-live checklist); Phase 3 leftovers
-(Redis rate limiter, malware scanning, Playwright in CI); iOS/macOS builds on a Mac.
+Done since last update: real MTN sandbox verified end to end (Collections + Disbursements) — see
+FINCORE_MASTER_PROGRESS.md §3. Later: Phase 3 leftovers (Redis rate limiter, malware scanning, Playwright in CI),
+iOS/macOS builds on a Mac.

@@ -4,7 +4,7 @@ None of these block continued engineering; they block **real-money operation**.
 
 | ID | Blocker | What's needed | Engineering status |
 |---|---|---|---|
-| B-1 | MTN MoMo production access + working sandbox login | MoMo partner application approved by MTN Ghana; production Collections **and** Disbursement subscription keys, API users/keys, target environment, callback URL registration and IP allow-listing. For the sandbox: remove the network secret "MTN MoMo Collections key (sandbox)" from the `fincore` cloud environment, regenerate both sandbox keys (they were pasted in chat) and set them in the server environment | Collections + Disbursements implemented and tested against a stand-in MTN API. Real sandbox: both keys accepted and API users created, but token login returns `500 login_failed` even with no credentials sent — likely the environment's network secret overriding the Authorization header |
+| B-1 | MTN MoMo production access | MoMo partner application approved by MTN Ghana; production Collections and Disbursement keys, API users/keys, target environment, callback URL registration and IP allow-listing | Sandbox verified end to end for Collections and Disbursements (real MTN sandbox, 2026-11-18). Owner should regenerate the sandbox keys (pasted in chat) |
 | B-2 | Telecel Cash API | Partner agreement + API specification + credentials | Adapter skeleton; config surface ready |
 | B-3 | AT Money API | Partner agreement + API specification + credentials | Adapter skeleton; config surface ready |
 | B-4 | Bank transfers (GhIPSS) | GhIPSS membership via a sponsor bank (or direct as a licensed PSP): institution code, API spec, credentials | Adapter skeleton; config ready |

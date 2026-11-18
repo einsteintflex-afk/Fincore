@@ -38,7 +38,7 @@ from app.providers.base import (
 )
 
 # MTN transaction status -> FinCore status.
-STATUS_MAP = {"SUCCESSFUL": "successful", "PENDING": "pending", "ONGOING": "pending", "FAILED": "failed",
+STATUS_MAP = {"SUCCESSFUL": "successful", "PENDING": "pending", "ONGOING": "pending", "CREATED": "pending", "FAILED": "failed",
               "REJECTED": "failed", "TIMEOUT": "failed", "EXPIRED": "failed"}
 
 # Finer-grained outcome kept on the transaction (shown to staff/customers). MTN puts the cause in ``reason``.
@@ -68,7 +68,7 @@ def classify(status: str, reason: str | None) -> str:
     reason = (reason or "").upper()
     if status == "SUCCESSFUL":
         return "successful"
-    if status in ("PENDING", "ONGOING", ""):
+    if status in ("PENDING", "ONGOING", "CREATED", ""):
         return "pending"
     if status == "REJECTED" or reason in REJECTED_REASONS:
         return "rejected"
