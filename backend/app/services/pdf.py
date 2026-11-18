@@ -188,10 +188,6 @@ def payment_receipt(pr, merchant_name: str, merchant_code: str, *, mask_customer
             ("Paid with", (pr.meta or {}).get("card", {}).get("label")
              or ((pr.network or "").upper() + " Mobile Money" if pr.network else (pr.channel or "—").replace("_", " ").title())),
             ("Paid at", f"{pr.paid_at:%d %b %Y %H:%M} UTC" if pr.paid_at else "—")]
-    direct = (pr.meta or {}).get("direct_momo")
-    if pr.channel == "direct_momo" and direct:
-        rows.append(("MoMo transaction ID", direct.get("transaction_id")))
-        rows.append(("Confirmed by", "Merchant, against their MoMo statement"))
     rows += [(a["label"], a["value"]) for a in (pr.meta or {}).get("form", [])]
     rows += [("Verification code", forms.receipt_code(pr.reference)),
              ("Verify this receipt", f"{settings.frontend_base_url}/verify")]

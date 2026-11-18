@@ -76,3 +76,11 @@ export function detectNetwork(phone: string): string | null {
   if (["26", "27", "56", "57"].includes(p)) return "at";
   return null;
 }
+
+/** How a payment was processed, in plain words. Simulated and MTN-sandbox payments are never real money. */
+export function providerLabel(provider?: string | null, mode?: string | null): string | null {
+  if (provider === "sandbox" || provider === "sandbox_card") return "Simulated (test mode)";
+  if (provider === "mtn_momo_sandbox") return "MTN sandbox (test money)";
+  if (mode === "sandbox") return "Test mode";
+  return null;
+}

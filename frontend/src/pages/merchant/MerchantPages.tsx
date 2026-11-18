@@ -29,12 +29,6 @@ import type { Business, Page, PaymentLink, PaymentRequest, Transaction, Wallet }
 import { TransactionDetail } from "@/pages/customer/CustomerPages";
 import { useToast } from "@/components/toast";
 
-function channelLabel(p: PaymentRequest): string {
-  if (p.channel === "direct_momo") return "MoMo transfer to you";
-  if (p.channel === "card") return p.metadata?.card?.label ?? "Card";
-  return p.network ? NETWORKS[p.network] : titleCase(p.channel);
-}
-
 function useBiz() {
   const { bizId } = useParams();
   const q = useGet<Business>(["business", bizId], `/businesses/${bizId}`);
@@ -152,21 +146,8 @@ export function MerchantPayments() {
   const list = useGet<Page<PaymentRequest>>(["payments", bizId, env, page, status, search], `/businesses/${bizId}/payment-requests`, { environment: env, page, status, search });
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<PaymentRequest | null>(null);
-  const toConfirm = useGet<Page<PaymentRequest>>(["payments", bizId, "to-confirm"], `/businesses/${bizId}/payment-requests`, { status: "awaiting_confirmation", page_size: 50 }, { refetchInterval: 20000 });
   return (
     <>
-      {!!toConfirm.data?.total && (
-        <Card title={`${toConfirm.data.total} MoMo payment${toConfirm.data.total > 1 ? "s" : ""} to confirm`} className="mb-6">
-          <p className="mb-3 text-sm text-slate-600">These payers say they sent money to your MoMo number. Check your MoMo SMS or statement for the transaction ID and amount, then confirm or reject.</p>
-          <Table rows={toConfirm.data.items} keyFn={(p) => p.id} onRowClick={setSelected}
-            columns={[
-              { header: "Payer", cell: (p) => <div><p className="font-medium">{p.customer_name || "—"}</p><p className="text-xs text-slate-500">{maskPhone(p.customer_phone)}</p></div> },
-              { header: "Transaction ID", cell: (p) => <span className="font-mono text-xs">{p.metadata?.direct_momo?.transaction_id}</span> },
-              { header: "Ref", cell: (p) => <span className="font-mono text-xs">{p.metadata?.direct_momo?.short_code}</span>, hideOnMobile: true },
-              { header: "Amount", cell: (p) => <Amount value={p.amount} />, className: "text-right" },
-            ]} />
-        </Card>
-      )}
       <PageHeader title="Payments" actions={can("payments:create") && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>Request payment</Button>} />
       <Card>
         <Tabs value={env} onChange={(v) => { setEnv(v); setPage(1); }} tabs={[{ value: "live", label: "Live" }, { value: "sandbox", label: "Sandbox (API tests)" }]} />
@@ -174,7 +155,7 @@ export function MerchantPayments() {
           <Input placeholder="Search reference, email, phone" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} aria-label="Status">
             <option value="">All statuses</option>
-            {["pending", "awaiting_confirmation", "processing", "successful", "failed", "refunded", "partially_refunded", "expired", "cancelled"].map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}
+            {["pending", "processing", "successful", "failed", "refunded", "partially_refunded", "expired", "cancelled"].map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}
           </Select>
         </div>
         {list.isLoading ? <Spinner /> : list.error ? <ErrorState error={list.error} /> : !list.data?.items.length ? <Empty title="No payments" /> : (
@@ -183,7 +164,7 @@ export function MerchantPayments() {
               columns={[
                 { header: "Date", cell: (p) => dateTime(p.created_at), hideOnMobile: true },
                 { header: "Customer", cell: (p) => <div><p className="font-medium">{p.customer_name || p.customer_email || maskPhone(p.customer_phone) || "—"}</p><p className="text-xs text-slate-500">{p.reference}</p></div> },
-                { header: "Channel", cell: (p) => channelLabel(p), hideOnMobile: true },
+                { header: "Channel", cell: (p) => (p.network ? NETWORKS[p.network] : titleCase(p.channel)), hideOnMobile: true },
                 { header: "Status", cell: (p) => <Badge>{p.status}</Badge> },
                 { header: "Amount", cell: (p) => <Amount value={p.amount} />, className: "text-right" },
               ]} />
@@ -235,25 +216,6 @@ function CreatePaymentRequest({ open, onClose, bizId }: { open: boolean; onClose
   );
 }
 
-function ConfirmDirectMomo({ p, bizId, onDone }: { p: PaymentRequest; bizId: string; onDone: () => void }) {
-  const [note, setNote] = useState("");
-  const d = p.metadata?.direct_momo ?? {};
-  const review = useAction((decision: string) => api(`/businesses/${bizId}/payment-requests/${p.reference}/direct-momo/review`, { body: { decision, note: note || null } }), {
-    invalidate: [["payments", bizId]], success: (r: any) => (r.status === "successful" ? "Payment confirmed — receipt is ready" : "Payment rejected"), onSuccess: onDone,
-  });
-  return (
-    <div className="mt-5 space-y-3 rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200">
-      <p className="text-sm font-semibold text-amber-900">Check your MoMo before confirming</p>
-      <KV items={[["Transaction ID", <span key="t" className="font-mono">{d.transaction_id}</span>], ["Sent from", maskPhone(d.sender_phone)], ["Sender name", d.sender_name || "—"], ["Reference", d.short_code], ["Expected amount", money(p.amount)]]} />
-      <Input placeholder="Note (required if rejecting)" value={note} onChange={(e) => setNote(e.target.value)} />
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="danger" disabled={!note} loading={review.isPending} onClick={() => review.mutate("reject")}>Reject</Button>
-        <Button loading={review.isPending} onClick={() => review.mutate("confirm")}>Confirm received</Button>
-      </div>
-    </div>
-  );
-}
-
 function PaymentDetail({ p, onClose, bizId, canRefund }: { p: PaymentRequest | null; onClose: () => void; bizId: string; canRefund: boolean }) {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -276,7 +238,7 @@ function PaymentDetail({ p, onClose, bizId, canRefund }: { p: PaymentRequest | n
         ["Refunded", money(p.amount_refunded)],
         ["Customer", p.customer_name || p.customer_email || "—"],
         ["Phone", maskPhone(p.customer_phone) || "—"],
-        ["Channel", channelLabel(p)],
+        ["Channel", p.network ? NETWORKS[p.network] : titleCase(p.channel)],
         ["Your reference", p.merchant_reference],
         ...((p.metadata?.form ?? []) as { label: string; value: string }[]).map((a) => [a.label, a.value] as [string, string]),
         ["Created", dateTime(p.created_at)],
@@ -284,7 +246,6 @@ function PaymentDetail({ p, onClose, bizId, canRefund }: { p: PaymentRequest | n
         ...(p.failure_reason ? [["Failure", p.failure_reason] as [string, string]] : []),
       ]} />
       {p.status === "pending" && <Button variant="secondary" className="mt-4 w-full" onClick={() => cancel.mutate(undefined)}>Cancel request</Button>}
-      {p.status === "awaiting_confirmation" && <ConfirmDirectMomo p={p} bizId={bizId} onDone={onClose} />}
       {p.paid_at && (
         <Button variant="secondary" className="mt-4 w-full" onClick={() => downloadFile(`/businesses/${bizId}/payment-requests/${p.reference}/receipt.pdf`, undefined, `fincore-payment-${p.reference}.pdf`)}>
           Download receipt
@@ -615,7 +576,6 @@ export function MerchantSettings() {
             {editable && <Button type="submit" loading={saveProfile.isPending}>Save profile</Button>}
           </form>
         </Card>
-        <DirectMomoSettings bizId={bizId} current={biz.direct_momo ?? {}} editable={editable} />
         <Card title="Settlement account">
           <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); saveDest.mutate(undefined); }}>
             <Select label="Channel" value={d.channel} onChange={(e) => setDest({ ...d, channel: e.target.value })} disabled={!editable}>
@@ -638,23 +598,5 @@ export function MerchantSettings() {
         </Card>
       </div>
     </>
-  );
-}
-
-function DirectMomoSettings({ bizId, current, editable }: { bizId: string; current: Record<string, any>; editable: boolean }) {
-  const [f, setF] = useState({ enabled: !!current.enabled, phone: current.msisdn ? "0" + String(current.msisdn).slice(3) : "", account_name: current.account_name ?? "" });
-  const save = useAction(() => api(`/businesses/${bizId}/direct-momo`, { method: "PUT", body: f }), {
-    invalidate: [["business", bizId]], success: f.enabled ? "Payers can now send MoMo to your number" : "Direct MoMo payments turned off",
-  });
-  return (
-    <Card title="Pay to my MoMo number">
-      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save.mutate(undefined); }}>
-        <p className="text-sm text-slate-600">Works today without any provider approval: payers send money straight to your MoMo number and type the transaction ID; you confirm each one under Payments. FinCore never holds this money and charges no fee on it.</p>
-        <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={f.enabled} disabled={!editable} onChange={(e) => setF({ ...f, enabled: e.target.checked })} /> Accept MoMo transfers to my number</label>
-        <Input label="Your MoMo number" placeholder="024 123 4567" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} disabled={!editable} />
-        <Input label="Name on the MoMo account (shown to payers)" value={f.account_name} onChange={(e) => setF({ ...f, account_name: e.target.value })} disabled={!editable} />
-        {editable && <Button type="submit" loading={save.isPending}>Save</Button>}
-      </form>
-    </Card>
   );
 }

@@ -23,8 +23,6 @@ from app.schemas.common import (
     BusinessIn,
     BusinessOut,
     BusinessUpdateIn,
-    DirectMomoReviewIn,
-    DirectMomoSettingsIn,
     MemberIn,
     MemberOut,
     MemberUpdateIn,
@@ -108,15 +106,6 @@ def update(business_id: uuid.UUID, body: BusinessUpdateIn, user: User = Depends(
            db: Session = Depends(get_db)):
     b = bsvc.require_permission(db, user, business_id, "business:manage")
     return biz_out(bsvc.update_business(db, b, user, body.model_dump(exclude_none=True)),
-                   bsvc.member_role(db, user, business_id))
-
-
-@router.put("/{business_id}/direct-momo", response_model=BusinessOut)
-def direct_momo_settings(business_id: uuid.UUID, body: DirectMomoSettingsIn, user: User = Depends(current_user),
-                         db: Session = Depends(get_db)):
-    """'Pay to my MoMo number': payers send money straight to this number; you confirm each payment."""
-    b = bsvc.require_permission(db, user, business_id, "business:manage")
-    return biz_out(bsvc.set_direct_momo(db, b, user, body.enabled, body.phone, body.account_name),
                    bsvc.member_role(db, user, business_id))
 
 
@@ -253,15 +242,6 @@ def payment_receipt(business_id: uuid.UUID, reference: str, user: User = Depends
     pr = _pr(db, business_id, reference)
     return pdf_response(pdf.payment_receipt(pr, b.trading_name or b.name, b.merchant_code, mask_customer=False),
                         f"fincore-payment-{pr.reference}.pdf")
-
-
-@router.post("/{business_id}/payment-requests/{reference}/direct-momo/review", response_model=PaymentRequestOut)
-def review_direct_momo(business_id: uuid.UUID, reference: str, body: DirectMomoReviewIn,
-                       user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Confirm (after checking your MoMo SMS/statement) or reject a payer's direct MoMo payment."""
-    bsvc.require_permission(db, user, business_id, "payments:create")
-    pr = _pr(db, business_id, reference)
-    return pr_out(PaymentService(db).review_direct_momo(pr, user, body.decision, body.note))
 
 
 @router.post("/{business_id}/payment-requests/{reference}/cancel", response_model=PaymentRequestOut)

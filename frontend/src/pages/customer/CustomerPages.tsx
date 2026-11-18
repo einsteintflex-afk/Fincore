@@ -25,8 +25,9 @@ import {
 } from "@/components/ui";
 import { api, downloadFile, newIdempotencyKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { amountError, dateOnly, dateTime, detectNetwork, maskPhone, money, NETWORKS, titleCase } from "@/lib/format";
-import { useAction, useGet, useWallets } from "@/lib/hooks";
+import { amountError, dateOnly, dateTime, detectNetwork, maskPhone, money, NETWORKS, providerLabel, titleCase } from "@/lib/format";
+import { useAction, useGet, usePlatform, useWallets } from "@/lib/hooks";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/toast";
 import type { Page, Transaction, Wallet } from "@/lib/types";
 
@@ -38,7 +39,7 @@ export function TransactionRow({ t }: { t: Transaction }) {
         <p className="truncate text-sm font-medium text-slate-800">{t.description || titleCase(t.type)}</p>
         <p className="text-xs text-slate-500">
           {dateTime(t.created_at)} · {titleCase(t.type)}
-          {t.provider_mode === "sandbox" && <span className="ml-1 text-yellow-700">· simulated</span>}
+          {providerLabel(t.provider, t.provider_mode) && <span className="ml-1 text-yellow-700">· {providerLabel(t.provider, t.provider_mode)}</span>}
         </p>
       </div>
       <div className="text-right">
@@ -64,7 +65,7 @@ export function TransactionDetail({ t, onClose }: { t: Transaction | null; onClo
         <Amount value={t.amount} direction={t.direction} className="text-3xl" />
         <div className="mt-2 flex justify-center gap-2">
           <Badge>{t.status}</Badge>
-          {t.provider_mode === "sandbox" && <Badge tone="sandbox">Simulated</Badge>}
+          {providerLabel(t.provider, t.provider_mode) && <Badge tone="sandbox">{providerLabel(t.provider, t.provider_mode)}</Badge>}
         </div>
       </div>
       <KV
@@ -219,9 +220,32 @@ export function CustomerDashboard() {
 }
 
 // ------------------------------------------------------------------ send / deposit / withdraw
-function ResultCard({ t, onAgain }: { t: Transaction; onAgain: () => void }) {
+function ResultCard({ t: initial, onAgain }: { t: Transaction; onAgain: () => void }) {
   const nav = useNavigate();
+  const qc = useQueryClient();
+  const [t, setT] = useState(initial);
+  // While MTN waits for the customer's PIN, keep asking FinCore (which asks MTN) for the verified status.
+  useEffect(() => {
+    if (t.status !== "processing") return;
+    let tries = 0;
+    const timer = setInterval(async () => {
+      tries += 1;
+      try {
+        const next = await api<Transaction>(`/transactions/${t.reference}/refresh`, { method: "POST" });
+        setT(next);
+        if (next.status !== "processing") {
+          qc.invalidateQueries({ queryKey: ["wallets"] });
+          qc.invalidateQueries({ queryKey: ["transactions"] });
+        }
+      } catch {
+        /* keep trying */
+      }
+      if (tries >= 60) clearInterval(timer);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [t.status, t.reference, qc]);
   const ok = t.status === "successful";
+  const isMomo = t.channel === "mobile_money" && t.type === "deposit";
   return (
     <Card>
       <div className="py-4 text-center">
@@ -231,7 +255,14 @@ function ResultCard({ t, onAgain }: { t: Transaction; onAgain: () => void }) {
         </p>
         <p className="mt-1 text-sm text-slate-500">{t.description}</p>
         {t.failure_reason && <p className="mt-2 text-sm text-rose-600">{t.failure_reason}</p>}
-        {t.status === "processing" && <p className="mt-2 text-sm text-slate-600">We're waiting for the provider to confirm. You'll get a notification.</p>}
+        {t.status === "processing" && (
+          <div className="mx-auto mt-3 max-w-sm rounded-lg bg-brand-50 p-3 text-sm text-brand-900">
+            {isMomo ? <>Check your phone and <b>approve the MTN MoMo prompt</b> with your PIN. This page updates automatically once MTN confirms.</>
+              : <>Waiting for the provider to confirm. This page updates automatically.</>}
+            {t.provider === "mtn_momo_sandbox" && <p className="mt-2 text-xs text-brand-700">MTN sandbox: test money only — MTN does not send prompts to real phones in the sandbox.</p>}
+          </div>
+        )}
+        {providerLabel(t.provider, t.provider_mode) && <div className="mt-2"><Badge tone="sandbox">{providerLabel(t.provider, t.provider_mode)}</Badge></div>}
         <p className="mt-3 text-xs text-slate-400">Ref {t.reference}</p>
         <div className="mt-5 flex justify-center gap-2">
           <Button variant="secondary" onClick={onAgain}>{ok ? "New transaction" : "Try again"}</Button>
@@ -328,6 +359,7 @@ export function SendPage() {
 
 export function DepositPage() {
   const { user } = useAuth();
+  const platform = usePlatform();
   const { wallets, walletId, setWalletId } = useDefaultWallet();
   const [phone, setPhone] = useState(user?.phone ? "0" + user.phone.slice(3) : "");
   const [amount, setAmount] = useState("");
@@ -365,7 +397,9 @@ export function DepositPage() {
             ))}
           </div>
           <Button type="submit" size="lg" className="w-full" loading={deposit.isPending}>Request payment</Button>
-          <p className="text-xs text-slate-500">Sandbox tip: numbers ending 0000 fail, 1111 stay pending, anything else succeeds.</p>
+          <p className="text-xs text-slate-500">You'll get an MTN MoMo prompt on this phone — approve it with your PIN. FinCore credits your wallet only after MTN confirms the payment.</p>
+          {platform.data?.mtn_mode === "off" && <p className="text-xs text-yellow-700">Test mode (simulator): numbers ending 0000 fail, 1111 stay pending, anything else succeeds. No real money moves.</p>}
+          {platform.data?.mtn_mode === "sandbox" && <p className="text-xs text-yellow-700">MTN sandbox: MTN's test system with test money — no prompt reaches real phones and no real money moves.</p>}
         </form>
       </Card>
     </>

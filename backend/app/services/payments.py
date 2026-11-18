@@ -107,7 +107,6 @@ class PaymentService:
     # ---------------------------------------------------------------- pay with FinCore wallet
     def pay_with_wallet(self, pr: PaymentRequest, payer: User, wallet_id: uuid.UUID) -> PaymentRequest:
         db = self.db
-        self._assert_simulation_allowed(pr)
         self._assert_payable(pr)
         if pr.environment != "live":
             raise ValidationFailed("Sandbox payments can only be paid with sandbox mobile money")
@@ -156,7 +155,6 @@ class PaymentService:
     # ---------------------------------------------------------------- pay with mobile money
     def pay_with_mobile_money(self, pr: PaymentRequest, phone: str) -> PaymentRequest:
         db = self.db
-        self._assert_simulation_allowed(pr)
         self._assert_payable(pr)
         msisdn = normalize_msisdn(phone)
         network = detect_network(msisdn)
@@ -208,7 +206,6 @@ class PaymentService:
     def start_card_payment(self, pr: PaymentRequest) -> str:
         """Create a hosted card session and return the URL to send the payer to."""
         db = self.db
-        self._assert_simulation_allowed(pr)
         self._assert_payable(pr)
         sandbox = pr.environment != "live"
         acquirer = card_acquirer(sandbox=sandbox)
@@ -277,77 +274,6 @@ class PaymentService:
             return pr
         return self.apply_card_result(pr, result.status, result.message, provider_reference=result.provider_reference)
 
-    # ---------------------------------------------------------------- pay straight to the owner's MoMo number
-    def direct_only(self, pr: PaymentRequest) -> bool:
-        """In test mode, a real (live-environment) payment link whose merchant accepts MoMo transfers to their own
-        number must not offer the simulated methods: they would produce 'paid' receipts with no real money."""
-        if pr.environment != "live" or settings.live_payments_enabled:
-            return False
-        biz = self.db.get(Business, pr.business_id)
-        return bool((biz.direct_momo or {}).get("enabled"))
-
-    def _assert_simulation_allowed(self, pr: PaymentRequest) -> None:
-        if self.direct_only(pr):
-            raise Forbidden("This merchant currently accepts payment by MoMo transfer only", code="direct_momo_only")
-
-    @staticmethod
-    def short_code(pr: PaymentRequest) -> str:
-        """Short reference the payer types into the MoMo 'reference' field."""
-        return pr.reference.rsplit("-", 1)[-1][-6:]
-
-    def claim_direct_momo(self, pr: PaymentRequest, transaction_id: str, sender_phone: str,
-                          sender_name: str | None) -> PaymentRequest:
-        """Payer says they sent the money to the owner's own number. Nothing is credited until the owner
-        confirms it against their MoMo SMS/statement."""
-        db = self.db
-        biz = db.get(Business, pr.business_id)
-        if not (biz.direct_momo or {}).get("enabled") or pr.environment != "live":
-            raise Forbidden("Direct mobile money payment is not available for this payment")
-        self._assert_payable(pr)
-        txid = re.sub(r"\s", "", transaction_id).upper()
-        if not re.fullmatch(r"[A-Z0-9.\-]{4,40}", txid):
-            raise ValidationFailed("Enter the transaction ID exactly as it appears in your MoMo SMS")
-        dup = db.scalar(select(PaymentRequest.reference).where(
-            PaymentRequest.business_id == pr.business_id, PaymentRequest.provider == "direct_momo",
-            PaymentRequest.provider_reference == txid, PaymentRequest.id != pr.id,
-            PaymentRequest.status.notin_([PaymentStatus.FAILED])))
-        if dup:
-            raise Conflict("This MoMo transaction ID has already been used for another payment", code="duplicate_txid")
-        pr.channel, pr.provider, pr.provider_reference = Channel.DIRECT_MOMO, "direct_momo", txid
-        pr.customer_phone = normalize_msisdn(sender_phone)
-        pr.network, pr.fee = detect_network(pr.customer_phone).value, ZERO  # FinCore charges no fee: it never held the money
-        pr.customer_name = pr.customer_name or sender_name
-        pr.status, pr.failure_reason = PaymentStatus.AWAITING_CONFIRMATION, None
-        pr.meta = {**(pr.meta or {}), "direct_momo": {
-            "transaction_id": txid, "sender_phone": pr.customer_phone, "sender_name": sender_name,
-            "to_msisdn": biz.direct_momo["msisdn"], "short_code": self.short_code(pr), "claimed_at": utcnow().isoformat()}}
-        notify(db, biz.owner_user_id, "payment_to_confirm", "Payment to confirm",
-               f"{pr.customer_name or 'A payer'} says they sent {pr.currency} {pr.amount:,.2f} to your MoMo "
-               f"(transaction {txid}, ref {self.short_code(pr)}). Check your MoMo and confirm.")
-        audit(db, "payment.direct_momo_claimed", actor_type="system", target_type="payment", target_id=pr.reference,
-              details={"transaction_id": txid})
-        db.commit()
-        return pr
-
-    def review_direct_momo(self, pr: PaymentRequest, actor: User, decision: str, note: str | None) -> PaymentRequest:
-        db = self.db
-        if pr.status != PaymentStatus.AWAITING_CONFIRMATION:
-            raise Conflict(f"This payment is {pr.status}", code="not_awaiting_confirmation")
-        meta = pr.meta or {}
-        meta["direct_momo"] = {**meta.get("direct_momo", {}), "reviewed_by": str(actor.id),
-                               "reviewed_at": utcnow().isoformat(), "decision": decision, "note": note}
-        pr.meta = dict(meta)
-        if decision == "confirm":
-            self._mark_paid(pr)  # receipt, webhooks, link counters; no ledger: money is in the owner's own MoMo
-        else:
-            pr.status = PaymentStatus.FAILED
-            pr.failure_reason = note or "The merchant could not find this MoMo payment"
-            webhooks.emit(db, pr.business_id, "charge.failed", charge_view(pr), environment=pr.environment)
-        audit(db, f"payment.direct_momo_{decision}ed", actor_id=actor.id, target_type="payment", target_id=pr.reference,
-              details={"transaction_id": meta["direct_momo"].get("transaction_id"), "note": note})
-        db.commit()
-        return pr
-
     def _apply_sandbox_result(self, pr: PaymentRequest, status: str, message: str) -> None:
         if status == "successful":
             self._mark_paid(pr)
@@ -395,17 +321,6 @@ class PaymentService:
                         created_by_id=actor.id if actor else None)
         db.add(refund)
         db.flush()
-
-        if pr.channel == Channel.DIRECT_MOMO:
-            # The money is in the owner's own MoMo, so the owner sends the refund themselves; FinCore records it.
-            refund.status = "successful"
-            refund.reason = (reason or "") + " (refunded directly from the merchant's MoMo)"
-            self._apply_refund_amount(pr, amount)
-            webhooks.emit(db, pr.business_id, "refund.processed", self.refund_view(refund, pr), environment=pr.environment)
-            audit(db, "payment.refund_recorded", actor_id=actor.id if actor else None, target_type="payment",
-                  target_id=pr.reference, details={"amount": amount, "channel": "direct_momo"})
-            db.commit()
-            return refund
 
         if pr.environment != "live":
             refund.status = "successful"
@@ -607,6 +522,7 @@ def on_transaction_final(db: Session, txn: Transaction) -> None:
                 svc._mark_paid(pr)
             elif txn.status == TxnStatus.FAILED:
                 pr.status, pr.failure_reason = PaymentStatus.FAILED, txn.failure_reason
+                pr.meta = {**(pr.meta or {}), "provider_outcome": (txn.meta or {}).get("provider_outcome", "failed")}
                 webhooks.emit(db, pr.business_id, "charge.failed", charge_view(pr), environment=pr.environment)
     elif txn.type == TxnType.REFUND and meta.get("refund_reference"):
         refund = db.scalar(select(Refund).where(Refund.reference == meta["refund_reference"]))

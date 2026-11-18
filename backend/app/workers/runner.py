@@ -29,7 +29,7 @@ from app.services.payments import PaymentService
 from app.services.transactions import TransactionService
 
 log = logging.getLogger("fincore.worker")
-POLL_AFTER = timedelta(minutes=2)
+POLL_AFTER = timedelta(seconds=30)
 _running = True
 
 

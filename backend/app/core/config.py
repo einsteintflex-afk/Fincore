@@ -55,15 +55,32 @@ class Settings(BaseSettings):
     webhook_timeout_seconds: float = 10.0
 
     # --- Payment provider credentials (all optional; adapters stay in sandbox without them) ---
-    mtn_momo_base_url: str = "https://sandbox.momodeveloper.mtn.com"
-    mtn_momo_target_environment: str = "sandbox"
-    mtn_momo_collection_subscription_key: str = ""
-    mtn_momo_collection_api_user: str = ""
-    mtn_momo_collection_api_key: str = ""
-    mtn_momo_disbursement_subscription_key: str = ""
-    mtn_momo_disbursement_api_user: str = ""
-    mtn_momo_disbursement_api_key: str = ""
-    mtn_momo_callback_url: str = ""
+    # ---- MTN MoMo (Collections / Disbursements). Two completely separate credential profiles. ----
+    # off        : MTN payments use the clearly-labelled simulator (development only)
+    # sandbox    : MTN developer sandbox — real MTN API, test money only, no real phone prompts
+    # production : real money — only after MTN Ghana partner onboarding AND FINCORE_LIVE_PAYMENTS_ENABLED=true
+    mtn_momo_mode: str = "off"
+    mtn_sandbox_base_url: str = "https://sandbox.momodeveloper.mtn.com"
+    mtn_sandbox_collection_subscription_key: str = ""
+    mtn_sandbox_collection_api_user: str = ""
+    mtn_sandbox_collection_api_key: str = ""
+    mtn_sandbox_disbursement_subscription_key: str = ""
+    mtn_sandbox_disbursement_api_user: str = ""
+    mtn_sandbox_disbursement_api_key: str = ""
+    mtn_sandbox_callback_url: str = ""
+    mtn_production_base_url: str = "https://proxy.momoapi.mtn.com"
+    mtn_production_target_environment: str = "mtnghana"
+    mtn_production_collection_subscription_key: str = ""
+    mtn_production_collection_api_user: str = ""
+    mtn_production_collection_api_key: str = ""
+    mtn_production_disbursement_subscription_key: str = ""
+    mtn_production_disbursement_api_user: str = ""
+    mtn_production_disbursement_api_key: str = ""
+    mtn_production_callback_url: str = ""
+    # Shared secret that must appear as ?token=... on MTN callback URLs (callbacks are unsigned by MTN).
+    mtn_callback_token: str = ""
+    # A RequestToPay still pending after this long is treated as expired (payer never approved).
+    mtn_request_expiry_minutes: int = 15
 
     telecel_cash_base_url: str = ""
     telecel_cash_client_id: str = ""
@@ -81,8 +98,7 @@ class Settings(BaseSettings):
     ghipss_api_key: str = ""
 
     # Which adapter handles each channel when live payments are enabled.
-    # Values: sandbox | mtn_momo | telecel_cash | at_money | paystack | ghipss
-    route_mtn: str = "sandbox"
+    # Values: sandbox | telecel_cash | at_money | ghipss  (MTN is chosen by FINCORE_MTN_MOMO_MODE)
     route_telecel: str = "sandbox"
     route_at: str = "sandbox"
     route_bank: str = "sandbox"
@@ -126,6 +142,14 @@ class Settings(BaseSettings):
                 raise RuntimeError("FINCORE_SECRET_KEY must be set to a strong value outside development")
             if not self.encryption_key:
                 raise RuntimeError("FINCORE_ENCRYPTION_KEY must be set outside development")
+        if self.mtn_momo_mode not in ("off", "sandbox", "production"):
+            raise RuntimeError("FINCORE_MTN_MOMO_MODE must be off, sandbox or production")
+        if self.mtn_momo_mode == "production" and not self.live_payments_enabled:
+            raise RuntimeError("MTN production mode requires FINCORE_LIVE_PAYMENTS_ENABLED=true")
+        if self.live_payments_enabled and self.mtn_momo_mode == "sandbox":
+            raise RuntimeError("Live payments cannot run on the MTN sandbox; use FINCORE_MTN_MOMO_MODE=production")
+        if self.environment == "production" and self.mtn_momo_mode == "sandbox":
+            raise RuntimeError("The production deployment must not use MTN sandbox credentials")
 
 
 @lru_cache

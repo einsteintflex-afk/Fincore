@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import utcnow
 from app.core.errors import AppError, Conflict, Forbidden, NotFound, ValidationFailed
 from app.core.money import ZERO, validate_amount
@@ -104,6 +106,7 @@ class TransactionService:
         except (httpx.TimeoutException, httpx.NetworkError):
             log.warning("deposit provider call timed out", extra={"reference": txn.reference})
             txn.status = TxnStatus.PROCESSING
+            txn.meta = {**(txn.meta or {}), "provider_outcome": "timeout"}  # unknown; status checks will resolve it
             db.commit()
             return txn
         except AppError as exc:
@@ -248,6 +251,8 @@ class TransactionService:
         if txn.status in FINAL:
             return
         txn.provider_reference = result.provider_reference
+        outcome = result.outcome or {"successful": "successful", "pending": "pending"}.get(result.status, "failed")
+        txn.meta = {**(txn.meta or {}), "provider_outcome": outcome}
         inflow = txn.type in (TxnType.DEPOSIT, TxnType.PAYMENT)
         if result.status == "successful":
             if inflow:
@@ -268,12 +273,26 @@ class TransactionService:
 
             on_transaction_final(self.db, txn)
 
-    def refresh_from_provider(self, txn: Transaction) -> Transaction:
-        if txn.status in FINAL or not txn.provider_reference:
+    STATUS_CHECK_MIN_INTERVAL = 3  # seconds; protects the provider from tight polling loops
+
+    def refresh_from_provider(self, txn: Transaction, *, force: bool = False) -> Transaction:
+        """Ask the provider for the authoritative status. Money is only credited from this (or an equivalent
+        verified callback), never from what a browser or an unsigned callback claims."""
+        if txn.status in FINAL or not txn.provider_reference or txn.provider in ("internal", None):
             return txn
+        now = utcnow()
+        last = (txn.meta or {}).get("last_status_check")
+        if last and not force and (now - datetime.fromisoformat(last)).total_seconds() < self.STATUS_CHECK_MIN_INTERVAL:
+            return txn
+        txn.meta = {**(txn.meta or {}), "last_status_check": now.isoformat()}
         provider = get_provider(txn.provider)
-        direction = "collection" if txn.type in (TxnType.DEPOSIT, TxnType.PAYMENT) else "disbursement"
-        result = provider.check_status(txn.provider_reference, direction)
+        inflow = txn.type in (TxnType.DEPOSIT, TxnType.PAYMENT)
+        result = provider.check_status(txn.provider_reference, "collection" if inflow else "disbursement")
+        if result.status == "pending" and inflow and txn.provider.startswith("mtn_momo"):
+            age = now - (txn.created_at if txn.created_at.tzinfo else txn.created_at.replace(tzinfo=timezone.utc))
+            if age > timedelta(minutes=settings.mtn_request_expiry_minutes):
+                result = ProviderResult(status="failed", provider_reference=result.provider_reference,
+                                        outcome="expired", message="The payer did not approve the MoMo prompt in time")
         self.apply_provider_result(txn, result)
         self.db.commit()
         return txn

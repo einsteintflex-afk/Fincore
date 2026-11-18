@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from app.core.config import settings
-from app.core.errors import ValidationFailed
+from app.core.errors import ProviderNotConfigured, ValidationFailed
 from app.providers.base import PaymentProvider
 from app.providers.cards import BankCardAcquirer, CardAcquirer, SandboxCardAcquirer
-from app.providers.mtn_momo import MtnMomoProvider
+from app.providers.mtn_momo import MtnMomoProvider, MtnMomoSandboxProvider
 from app.providers.paystack import PaystackProvider
 from app.providers.pending import AtMoneyProvider, GhipssProvider, TelecelCashProvider
 from app.providers.sandbox import SandboxProvider
@@ -14,6 +14,7 @@ from app.providers.sandbox import SandboxProvider
 PROVIDER_CLASSES: dict[str, type[PaymentProvider]] = {
     "sandbox": SandboxProvider,
     "mtn_momo": MtnMomoProvider,
+    "mtn_momo_sandbox": MtnMomoSandboxProvider,
     "paystack": PaystackProvider,
     "telecel_cash": TelecelCashProvider,
     "at_money": AtMoneyProvider,
@@ -44,22 +45,43 @@ def override_provider(code: str, provider: PaymentProvider | None) -> None:
         _overrides[code] = provider
 
 
+def _simulator(sandbox: bool) -> PaymentProvider:
+    """The labelled simulator is a development/testing tool, never a real payment method: a production deployment
+    refuses to use it for real (non-sandbox-key) payments."""
+    if settings.is_production and not sandbox:
+        raise ProviderNotConfigured("Real payment collection for this channel is not configured yet")
+    return get_provider("sandbox")
+
+
 def route(channel: str, network: str | None = None, *, sandbox: bool = False) -> PaymentProvider:
     """Choose the provider for a channel/network.
 
-    While ``FINCORE_LIVE_PAYMENTS_ENABLED`` is false, or for sandbox API traffic, everything goes to the
-    simulated sandbox provider so no real money can move.
+    * Developer sandbox-key traffic (``sandbox=True``) always uses the simulator.
+    * MTN numbers follow ``FINCORE_MTN_MOMO_MODE``: ``sandbox`` -> MTN developer sandbox (test money),
+      ``production`` (with live payments enabled) -> MTN production, ``off`` -> simulator.
+    * Other rails use the simulator until live payments are enabled and their adapter is configured.
     """
-    if sandbox or not settings.live_payments_enabled:
+    if sandbox:
         return get_provider("sandbox")
+    if channel == "mobile_money" and network == "mtn":
+        mode = settings.mtn_momo_mode
+        if mode == "sandbox":
+            return get_provider("mtn_momo_sandbox")
+        if mode == "production" and settings.live_payments_enabled:
+            return get_provider("mtn_momo")
+        return _simulator(sandbox)
+    if not settings.live_payments_enabled:
+        return _simulator(sandbox)
     if channel == "mobile_money":
-        code = {"mtn": settings.route_mtn, "telecel": settings.route_telecel, "at": settings.route_at}.get(network or "")
+        code = {"telecel": settings.route_telecel, "at": settings.route_at}.get(network or "")
         if not code:
             raise ValidationFailed("Unsupported mobile money network")
     elif channel == "bank":
         code = settings.route_bank
     else:
         raise ValidationFailed(f"Unsupported channel {channel}")
+    if code == "sandbox":
+        return _simulator(sandbox)
     return get_provider(code)
 
 

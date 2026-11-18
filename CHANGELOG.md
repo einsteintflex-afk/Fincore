@@ -1,15 +1,20 @@
 # Changelog
 
-## 0.6.0 — 2026-11-18 (session 5)
+## 0.7.0 — 2026-11-18 (session 5, continued)
+
+### Removed
+- "Pay to my MoMo number" (personal-number collection) removed from all screens, APIs, settings, receipts, tests
+  and docs; migration `3f4102dc6d06` deletes the stored number and cancels payments awaiting manual confirmation.
 
 ### Added
-- "Pay to my MoMo number": owner enables it in Settings (number + account name); payers send MoMo directly,
-  enter the transaction ID; owner gets a notification and a "to confirm" list, confirms or rejects; receipt and
-  verification work as usual. Duplicate transaction IDs rejected; no FinCore ledger entries or fees (TD-021).
-- In test mode, real payment links with this enabled offer only the real-money method.
-
-### Changed
-- Test-mode banner now says MoMo prompts and cards are simulated while MoMo transfers to your own number are real.
+- MTN MoMo Collections as the MoMo channel: RequestToPay on the customer's number, credit only after MTN's status
+  API confirms, outcomes successful/pending/rejected/expired/timeout/failed, request expiry, rate-limited status
+  checks, 30-second worker polling, callback re-verification with optional URL token, idempotent references.
+- Separate sandbox and production MTN credential sets and provider codes; startup refuses unsafe combinations;
+  production deployments refuse the simulator for real payments.
+- Checkout and deposit screens poll the verified status while the MoMo prompt is pending; clear labels for
+  simulated, MTN sandbox (test money) and real payments.
+- `tests/test_mtn.py` (31 tests, fake MTN API).
 
 ## 0.5.0 — 2026-11-13 (session 4)
 

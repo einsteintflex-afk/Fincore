@@ -47,6 +47,8 @@ class ProviderResult:
     provider_reference: str
     message: str = ""
     raw: dict = field(default_factory=dict)
+    # Finer outcome for failures: rejected | expired | timeout | failed (None for providers that don't say).
+    outcome: str | None = None
 
 
 @dataclass

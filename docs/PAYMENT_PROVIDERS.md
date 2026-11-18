@@ -4,14 +4,15 @@
 to the bank network. No aggregator/gateway is used. Order of work: MTN MoMo (adapter already built) →
 Telecel Cash → AT Money → GhIPSS bank transfers, each as soon as its partner agreement and API spec arrive.
 
-All adapters implement `app/providers/base.py::PaymentProvider`. Routing is configured per rail with
-`FINCORE_ROUTE_MTN`, `FINCORE_ROUTE_TELECEL`, `FINCORE_ROUTE_AT`, `FINCORE_ROUTE_BANK` and only takes
-effect when `FINCORE_LIVE_PAYMENTS_ENABLED=true`. Adapter status is visible in Admin → Overview → Payment providers.
+All adapters implement `app/providers/base.py::PaymentProvider`. MTN routing is set by
+`FINCORE_MTN_MOMO_MODE` (off | sandbox | production, see below); other rails by `FINCORE_ROUTE_TELECEL`,
+`FINCORE_ROUTE_AT`, `FINCORE_ROUTE_BANK`, which only take effect when `FINCORE_LIVE_PAYMENTS_ENABLED=true`. Adapter status is visible in Admin → Overview → Payment providers.
 
 | Adapter | Rails | Status | Tested with |
 |---|---|---|---|
 | `sandbox` | all | **Working** – deterministic simulator, signed callbacks | full test suite |
-| `mtn_momo` | MTN MoMo collections (RequestToPay) & disbursements (Transfer), name lookup | **Implemented**, needs credentials | mocked HTTP (`tests/test_providers.py`) |
+| `mtn_momo_sandbox` | MTN developer sandbox — RequestToPay collections (test money) | **Implemented**; sandbox keys provisioned, MTN login currently failing (see BLOCKERS B-1) | fake MTN API (`tests/test_mtn.py`, 31 tests) |
+| `mtn_momo` | MTN production — collections & disbursements, name lookup | **Implemented**, needs production keys from MTN Ghana | same suite |
 | `paystack` | MoMo (MTN, Telecel, AT) charges, transfers to MoMo/GhIPSS banks, name resolve, signed webhooks | **Implemented**, needs secret key | mocked HTTP |
 | `telecel_cash` | Telecel Cash | **Adapter skeleton** – partner API spec required | config tests |
 | `at_money` | AT Money | **Adapter skeleton** – partner API spec required | config tests |
@@ -19,12 +20,40 @@ effect when `FINCORE_LIVE_PAYMENTS_ENABLED=true`. Adapter status is visible in A
 
 ## What is needed from the business owner
 
-### MTN MoMo (direct)
+### MTN MoMo Collections — how it works (TD-022)
+1. Customer enters their MTN number and amount (deposit) or chooses MoMo at checkout.
+2. FinCore sends **RequestToPay** with the customer's MSISDN. `X-Reference-Id` is derived from FinCore's own
+   reference, so a retry can never create a second charge at MTN (MTN answers 409 and FinCore reads the status).
+3. MTN sends the official authorisation prompt to the customer's phone (production only — the sandbox never
+   prompts real phones); the customer approves with their PIN.
+4. FinCore learns the outcome from MTN's callback **and always re-queries MTN's status API** before crediting
+   anything; the browser and the (unsigned) callback are only hints. Status checks are rate-limited per
+   transaction; the worker polls in-flight requests every 30 s.
+5. Outcomes recorded on the transaction (`provider_outcome`): successful, pending, **rejected** (payer declined),
+   **expired** (payer didn't approve in time, or still pending after `FINCORE_MTN_REQUEST_EXPIRY_MINUTES`),
+   **timeout** (FinCore's call to MTN timed out — resolved from MTN's status, never guessed), failed.
+6. On success the ledger posts DR `PROVIDER_CLEARING:MTN_MOMO[_SANDBOX]` / CR customer wallet. Provider records
+   feed the reconciliation runs.
+
+**Credential separation:** `FINCORE_MTN_SANDBOX_*` and `FINCORE_MTN_PRODUCTION_*` are separate variable sets,
+separate provider codes (`mtn_momo_sandbox` / `mtn_momo`), separate clearing accounts. FinCore refuses to start
+with production mode without live payments, with live payments on the sandbox, or with the sandbox in a
+production deployment, and refuses a profile whose URL points at the other environment. Keys are read from
+settings only, never logged, never stored in transaction/provider records, never sent to the browser.
+
+**Callback URL:** `https://<api-domain>/api/v1/callbacks/mtn_momo?token=<FINCORE_MTN_CALLBACK_TOKEN>`
+(`mtn_momo_sandbox` for the sandbox). The token filters forged calls; MTN's status API is still the authority.
+
+### MTN MoMo — what the business owner must obtain for production
 1. Commercial agreement with MTN Ghana Mobile Money Ltd (MoMo partner onboarding).
 2. Production subscription keys for **Collections** and **Disbursements** products.
 3. API user + API key for each product (created via the provisioning API for sandbox; issued by MTN for production).
 4. The production `X-Target-Environment` value (e.g. `mtnghana`).
-5. A public HTTPS callback URL (`https://<api-domain>/api/v1/callbacks/mtn_momo`) and our egress IPs whitelisted.
+5. A public HTTPS callback URL (above) registered with MTN, and FinCore's server IPs whitelisted by MTN.
+6. Registered business documents for the partner application (Registrar-General registration, TIN, etc.).
+
+Having sandbox access does **not** mean production approval: MTN reviews the partner application separately
+and issues production keys only after approval.
 
 Sandbox credentials can be self-provisioned at https://momodeveloper.mtn.com (free) to test the adapter
 end-to-end; note the MTN sandbox only accepts `EUR`, which the adapter handles automatically.
@@ -42,12 +71,6 @@ their API specification, credentials and callback signing scheme. Implement the 
 ### Banks (GhIPSS)
 Direct GIP/GhIPSS Instant Pay access is via a sponsor bank. Needed: sponsor-bank agreement, institution
 code, API credentials and specification.
-
-## Direct MoMo transfers to the owner's number (no provider needed)
-Business Settings → "Pay to my MoMo number". Payers send money to that number with the short reference shown
-at checkout and submit the MoMo transaction ID; the owner confirms under Payments → "to confirm". FinCore does
-not hold these funds (no ledger postings, no fees) — see TD-021. This is the way to collect real money before
-MoMo merchant/API access and a card acquiring agreement are in place.
 
 ## Cards (Visa / Mastercard)
 Cards are accepted through an **acquiring bank's hosted payment page** (`app/providers/cards.py`): FinCore

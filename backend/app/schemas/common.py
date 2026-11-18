@@ -296,7 +296,6 @@ class BusinessOut(ORM):
     merchant_code: str
     settlement_schedule: str
     settlement_destination: dict
-    direct_momo: dict = {}
     owner_user_id: uuid.UUID
     created_at: datetime
     my_role: str | None = None
@@ -764,20 +763,3 @@ class SandboxCardIn(BaseModel):
 
 class Sandbox3dsIn(BaseModel):
     approve: bool
-
-
-class DirectMomoSettingsIn(BaseModel):
-    enabled: bool
-    phone: str | None = None
-    account_name: str | None = Field(default=None, max_length=100)
-
-
-class DirectMomoClaimIn(BaseModel):
-    transaction_id: str = Field(min_length=4, max_length=40, description="MoMo transaction ID from the payer's SMS")
-    sender_phone: str
-    sender_name: str | None = Field(default=None, max_length=100)
-
-
-class DirectMomoReviewIn(BaseModel):
-    decision: str = Field(pattern="^(confirm|reject)$")
-    note: str | None = Field(default=None, max_length=300)

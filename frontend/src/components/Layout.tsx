@@ -211,7 +211,9 @@ export function SandboxBanner() {
   if (!data.live_payments_enabled)
     return (
       <div className="bg-gold-400 px-4 py-1.5 text-center text-xs font-medium text-ink-900">
-        Test mode — MoMo prompts and card payments are simulated. MoMo transfers to your own number are real money.
+        {data.mtn_mode === "sandbox"
+          ? "Test mode — MTN MoMo runs on MTN's sandbox (test money); other payments are simulated. No real money moves."
+          : "Test mode — payments are simulated and no real money moves."}
       </div>
     );
   return null;

@@ -11,7 +11,7 @@ from app.models.business import Business, BusinessMember
 from app.models.enums import STAFF_ROLES, BusinessRole, BusinessStatus
 from app.models.user import User
 from app.services.audit import audit
-from app.services.ghana import detect_network, normalize_msisdn, validate_bank
+from app.services.ghana import normalize_msisdn, validate_bank
 from app.services.notifications import notify, queue_email
 from app.services.wallets import create_wallet
 
@@ -100,22 +100,6 @@ def update_business(db: Session, biz: Business, actor: User, data: dict) -> Busi
         biz.settlement_schedule = data["settlement_schedule"]
     audit(db, "business.updated", actor_id=actor.id, target_type="business", target_id=biz.id,
           details={k: v for k, v in data.items() if v is not None})
-    db.commit()
-    return biz
-
-
-def set_direct_momo(db: Session, biz: Business, actor: User, enabled: bool, phone: str | None,
-                    account_name: str | None) -> Business:
-    if enabled:
-        if not phone or not account_name:
-            raise ValidationFailed("Enter the MoMo number and the account name payers will see")
-        msisdn = normalize_msisdn(phone)
-        biz.direct_momo = {"enabled": True, "msisdn": msisdn, "network": detect_network(msisdn).value,
-                           "account_name": account_name.strip()}
-    else:
-        biz.direct_momo = {**(biz.direct_momo or {}), "enabled": False}
-    audit(db, "business.direct_momo_updated", actor_id=actor.id, target_type="business", target_id=biz.id,
-          details={"enabled": enabled})
     db.commit()
     return biz
 

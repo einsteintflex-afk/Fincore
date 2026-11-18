@@ -73,7 +73,6 @@ export interface Business {
   merchant_code: string;
   settlement_schedule: string;
   settlement_destination: Record<string, any>;
-  direct_momo?: Record<string, any>;
   created_at: string;
   my_role: string | null;
 }
@@ -132,4 +131,5 @@ export interface Platform {
   maintenance: { enabled: boolean; message?: string };
   support: { email?: string; phone?: string };
   signup_enabled?: boolean;
+  mtn_mode?: "off" | "sandbox" | "production";
 }

@@ -88,11 +88,13 @@ mobile money and, once an acquiring bank is contracted, cards. Receipts carry an
 offices check on the public `/verify` page. Customer-wallet features remain in the codebase but are not the
 focus.
 
-**TD-021 "Pay to my MoMo number" (owner decision, 2026-11-18).** Until MoMo merchant/API access and a card
-acquiring agreement exist, payers can send money straight to the owner's own MoMo number and submit the MoMo
-transaction ID; the owner confirms each one against their MoMo SMS/statement, after which FinCore marks the
-payment paid and issues the verifiable receipt. FinCore never holds this money, so it posts **no ledger
-entries** and charges no fee for it; refunds of such payments are recorded, not paid out. Transaction IDs are
-unique per business. In test mode, a live payment link of a business with this enabled offers *only* this
-method (simulated MoMo prompts/cards/wallet are blocked server-side) so no payer can obtain a "paid" receipt
-without real money. The owner's number is business configuration (database), never committed to the code.
+**TD-022 MTN MoMo Collections replaces personal-number collection (owner decision, 2026-11-18).** The owner
+withdrew "Pay to my MoMo number" (TD-021, now superseded and removed): no customer payment is directed to a
+personal number, and no other personal or invented business number replaces it. Customer MoMo payments go through
+the official MTN MoMo Collections API (RequestToPay on the customer's MSISDN). Credits happen only after MTN's
+status API confirms success. Sandbox and production credentials are separate variable sets and provider codes
+(`FINCORE_MTN_SANDBOX_*` / `mtn_momo_sandbox`, `FINCORE_MTN_PRODUCTION_*` / `mtn_momo`) selected by
+`FINCORE_MTN_MOMO_MODE`; unsafe combinations refuse to start. The simulator remains only as a labelled development
+and testing mode and is refused for real payments in a production deployment. A migration deleted the stored
+personal number and cancelled any payment still awaiting manual confirmation. Sandbox access is not production
+approval.
