@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — 2026-11-18 (session 5)
+
+### Added
+- "Pay to my MoMo number": owner enables it in Settings (number + account name); payers send MoMo directly,
+  enter the transaction ID; owner gets a notification and a "to confirm" list, confirms or rejects; receipt and
+  verification work as usual. Duplicate transaction IDs rejected; no FinCore ledger entries or fees (TD-021).
+- In test mode, real payment links with this enabled offer only the real-money method.
+
+### Changed
+- Test-mode banner now says MoMo prompts and cards are simulated while MoMo transfers to your own number are real.
+
 ## 0.5.0 — 2026-11-13 (session 4)
 
 ### Added

@@ -156,6 +156,7 @@ const statusTone: Record<string, string> = {
   balanced: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
   resolved: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
   pending: "bg-amber-50 text-amber-700 ring-amber-600/20",
+  awaiting_confirmation: "bg-amber-50 text-amber-700 ring-amber-600/20",
   processing: "bg-sky-50 text-sky-700 ring-sky-600/20",
   investigating: "bg-sky-50 text-sky-700 ring-sky-600/20",
   open: "bg-amber-50 text-amber-700 ring-amber-600/20",

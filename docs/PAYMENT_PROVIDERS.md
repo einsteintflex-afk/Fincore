@@ -43,6 +43,12 @@ their API specification, credentials and callback signing scheme. Implement the 
 Direct GIP/GhIPSS Instant Pay access is via a sponsor bank. Needed: sponsor-bank agreement, institution
 code, API credentials and specification.
 
+## Direct MoMo transfers to the owner's number (no provider needed)
+Business Settings → "Pay to my MoMo number". Payers send money to that number with the short reference shown
+at checkout and submit the MoMo transaction ID; the owner confirms under Payments → "to confirm". FinCore does
+not hold these funds (no ledger postings, no fees) — see TD-021. This is the way to collect real money before
+MoMo merchant/API access and a card acquiring agreement are in place.
+
 ## Cards (Visa / Mastercard)
 Cards are accepted through an **acquiring bank's hosted payment page** (`app/providers/cards.py`): FinCore
 creates a session, redirects the payer to the bank's page, and on return asks the bank for the result (never

@@ -15,8 +15,16 @@ from app.core.errors import Forbidden, NotFound
 from app.models.business import Business, PaymentLink, PaymentRequest
 from app.models.user import User
 from app.providers.cards import TEST_CARDS, card_brand, read_sandbox_token, sandbox_outcome
-from app.schemas.common import CheckoutPayMomoIn, CheckoutPayWalletIn, LinkPayIn, Sandbox3dsIn, SandboxCardIn
+from app.schemas.common import (
+    CheckoutPayMomoIn,
+    CheckoutPayWalletIn,
+    DirectMomoClaimIn,
+    LinkPayIn,
+    Sandbox3dsIn,
+    SandboxCardIn,
+)
 from app.services import forms, pdf
+from app.services.ghana import local_format
 from app.services.payments import PaymentService
 
 router = APIRouter(tags=["Checkout (public)"])
@@ -38,6 +46,10 @@ def public_view(db: Session, pr: PaymentRequest) -> dict:
         "merchant_code": biz.merchant_code, "livemode": pr.environment == "live" and settings.live_payments_enabled,
         "customer_email": _mask_email(pr.customer_email), "channel": pr.channel, "failure_reason": pr.failure_reason,
         "expires_at": pr.expires_at, "paid_at": pr.paid_at, "card": (pr.meta or {}).get("card", {}).get("label"),
+        "direct_momo": ({"number": local_format(biz.direct_momo["msisdn"]), "account_name": biz.direct_momo.get("account_name"),
+                         "network": biz.direct_momo.get("network"), "short_code": PaymentService.short_code(pr)}
+                        if (biz.direct_momo or {}).get("enabled") and pr.environment == "live" else None),
+        "direct_only": PaymentService(db).direct_only(pr),
         "redirect_url": (link.redirect_url if link else None) or pr.callback_url,
     }
 
@@ -69,6 +81,14 @@ def pay_wallet(reference: str, body: CheckoutPayWalletIn, user: User = Depends(c
                db: Session = Depends(get_db)):
     svc = PaymentService(db)
     return public_view(db, svc.pay_with_wallet(svc.get_request(reference), user, body.wallet_id))
+
+
+@router.post("/checkout/{reference}/direct-momo", dependencies=[Depends(money_movement_allowed)])
+def claim_direct_momo(reference: str, body: DirectMomoClaimIn, db: Session = Depends(get_db)):
+    """Payer sent the money to the merchant's own MoMo number and gives the transaction ID for confirmation."""
+    svc = PaymentService(db)
+    pr = svc.claim_direct_momo(svc.get_request(reference), body.transaction_id, body.sender_phone, body.sender_name)
+    return public_view(db, pr)
 
 
 @router.post("/checkout/{reference}/card", dependencies=[Depends(money_movement_allowed)])

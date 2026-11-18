@@ -9,13 +9,14 @@ registration, admission forms/fees, a mini market. MoMo + card. Direct integrati
       settlement-file reconciliation, performance
 - [x] Session 3: private mode, payment links with custom questions, receipt verification, pay-button code
 - [x] Session 4: card payments (hosted acquirer page, test acquirer with 3-D Secure, refunds to card)
+- [x] Session 5: "Pay to my MoMo number" with owner confirmation (real money today, TD-021)
 
 ## Next task (start here)
 **Owner setup wizard ("Get started" screen) for the private deployment.**
 
 Acceptance criteria:
 - First sign-in of a super admin with no businesses shows a guided screen: business name (e.g. Nurses Hub),
-  contact email/phone, settlement MoMo number or bank account; creates and auto-approves the business
+  contact email/phone, the MoMo number for direct transfers (TD-021) and settlement account; creates and auto-approves the business
   (owner is the platform admin) and sets the settlement destination.
 - Step 2 offers ready-made link templates the owner can tick and price: Registration form, Admission fee,
   Study package/exam prep, Healthcare registration, Mini-market checkout (amount entered by payer), each with

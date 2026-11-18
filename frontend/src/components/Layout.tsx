@@ -211,7 +211,7 @@ export function SandboxBanner() {
   if (!data.live_payments_enabled)
     return (
       <div className="bg-gold-400 px-4 py-1.5 text-center text-xs font-medium text-ink-900">
-        Sandbox mode — payments are simulated and no real money moves.
+        Test mode — MoMo prompts and card payments are simulated. MoMo transfers to your own number are real money.
       </div>
     );
   return null;

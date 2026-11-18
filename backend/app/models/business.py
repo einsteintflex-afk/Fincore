@@ -32,6 +32,9 @@ class Business(UUIDPk, Timestamps, Base):
     merchant_code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
     settlement_schedule: Mapped[str] = mapped_column(String(16), default="manual")  # daily|weekly|manual
     settlement_destination: Mapped[dict] = mapped_column(JSON, default=dict)
+    # "Pay to my MoMo number": payers send money straight to the owner's number and enter the MoMo transaction
+    # ID; the owner confirms. Money never passes through FinCore. {"enabled", "msisdn", "account_name"}
+    direct_momo: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
 
 
 class BusinessMember(UUIDPk, Timestamps, Base):

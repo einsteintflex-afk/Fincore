@@ -5,7 +5,7 @@ import { SandboxBanner } from "@/components/Layout";
 import { Alert, Badge, Button, ErrorState, Input, Select, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { amountError, detectNetwork, money, NETWORKS } from "@/lib/format";
+import { amountError, detectNetwork, maskPhone, money, NETWORKS } from "@/lib/format";
 import { useGet, usePlatform, useWallets } from "@/lib/hooks";
 
 export function LandingPage() {
@@ -131,6 +131,8 @@ export function VerifyReceiptPage() {
 }
 
 interface CheckoutView {
+  direct_momo: { number: string; account_name: string; network: string; short_code: string } | null;
+  direct_only: boolean;
   channel: string | null;
   card: string | null;
   reference: string;
@@ -168,7 +170,8 @@ export function CheckoutPage() {
   const { user } = useAuth();
   const wallets = useWallets();
   const platform = usePlatform();
-  const [method, setMethod] = useState<"momo" | "card" | "wallet">("momo");
+  const [chosen, setMethod] = useState<"direct" | "momo" | "card" | "wallet" | null>(null);
+  const [claim, setClaim] = useState({ transaction_id: "", sender_phone: "", sender_name: "" });
   const [params, setParams] = useSearchParams();
   const returning = params.get("card_return") === "1";
   useEffect(() => {
@@ -191,6 +194,11 @@ export function CheckoutPage() {
     setErr(null);
     setBusy(true);
     try {
+      if (method === "direct") {
+        await api(`/checkout/${reference}/direct-momo`, { body: { ...claim, sender_name: claim.sender_name || null } });
+        await refetch();
+        return;
+      }
       if (method === "card") {
         const { redirect_url } = await api(`/checkout/${reference}/card`, { method: "POST" });
         window.location.assign(redirect_url);
@@ -209,11 +217,17 @@ export function CheckoutPage() {
   const done = data.status === "successful" || data.status === "refunded" || data.status === "partially_refunded";
   const walletAllowed = platform.data?.signup_enabled !== false;
   const cardInProgress = data.status === "processing" && data.channel === "card";
+  // When the merchant takes MoMo straight to their own number, that's the default (it's real money even in test mode).
+  const method = chosen ?? (data.direct_momo ? "direct" : "momo");
+  const methods = data.direct_only
+    ? (["direct"] as const)
+    : ([...(data.direct_momo ? (["direct"] as const) : []), "momo", "card", ...(walletAllowed ? (["wallet"] as const) : [])] as const);
+  const methodLabel = { direct: "MoMo transfer", momo: "MoMo prompt", card: "Card", wallet: "FinCore wallet" } as const;
   const network = detectNetwork(phone);
   return (
     <CheckoutShell merchant={data.merchant_name}>
       <div className="border-b border-slate-100 bg-slate-50 px-6 py-5 text-center">
-        {!data.livemode && <Badge tone="sandbox">Test payment</Badge>}
+        {!data.livemode && !data.direct_only && <Badge tone="sandbox">Test payment</Badge>}
         <p className="mt-2 text-sm text-slate-500">{data.description || "Payment"}</p>
         <p className="tabular mt-1 text-3xl font-semibold">{money(data.amount, data.currency)}</p>
         <p className="mt-1 text-xs text-slate-400">Ref {data.reference}</p>
@@ -233,6 +247,12 @@ export function CheckoutPage() {
           </div>
         ) : returning ? (
           <Spinner label="Confirming your card payment…" />
+        ) : data.status === "awaiting_confirmation" ? (
+          <div className="text-center">
+            <Smartphone className="mx-auto h-10 w-10 text-brand-600" />
+            <p className="mt-3 font-semibold">Payment sent — waiting for confirmation</p>
+            <p className="text-sm text-slate-500">{data.merchant_name} is checking their MoMo for your transfer. This page updates automatically; you can also come back to this link later for your receipt.</p>
+          </div>
         ) : data.status === "processing" && !cardInProgress ? (
           <div className="text-center">
             <Smartphone className="mx-auto h-10 w-10 animate-pulse text-brand-600" />
@@ -249,19 +269,34 @@ export function CheckoutPage() {
             {data.status === "failed" && data.failure_reason && <Alert tone="error">Last attempt failed: {data.failure_reason}</Alert>}
             {cardInProgress && <Alert tone="warning">Your card payment wasn't completed. You can try again or choose another method.</Alert>}
             {err && <Alert tone="error">{err}</Alert>}
-            <div className={`grid gap-2 ${walletAllowed ? "grid-cols-3" : "grid-cols-2"}`}>
-              {(walletAllowed ? (["momo", "card", "wallet"] as const) : (["momo", "card"] as const)).map((m) => (
+            {methods.length > 1 && <div className={`grid gap-2 ${methods.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+              {methods.map((m) => (
                 <button
                   type="button"
                   key={m}
                   onClick={() => setMethod(m)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ring-1 ${method === m ? "bg-brand-50 text-brand-800 ring-brand-500" : "ring-slate-200"}`}
                 >
-                  {m === "momo" ? "Mobile money" : m === "card" ? "Card" : "FinCore wallet"}
+                  {methodLabel[m]}
                 </button>
               ))}
-            </div>
-            {method === "card" ? (
+            </div>}
+            {method === "direct" && data.direct_momo ? (
+              <div className="space-y-3">
+                <div className="rounded-lg bg-brand-50 p-3 text-sm text-brand-900 ring-1 ring-brand-200">
+                  <p className="font-semibold">Send {money(data.amount, data.currency)} by MoMo to:</p>
+                  <p className="mt-1 text-2xl font-semibold tracking-wide">{maskPhone(data.direct_momo.number)}</p>
+                  <p>{data.direct_momo.account_name}</p>
+                  <p className="mt-2">Reference: <span className="font-mono font-semibold">{data.direct_momo.short_code}</span></p>
+                  <p className="mt-2 text-xs text-brand-800">Dial *170# (MTN) or use your MoMo app → Transfer money → enter the number and amount, and type the reference. Then enter the transaction ID from your confirmation SMS below.</p>
+                </div>
+                <Input label="MoMo transaction ID (from your SMS)" placeholder="e.g. 54789632145" value={claim.transaction_id}
+                  onChange={(e) => setClaim({ ...claim, transaction_id: e.target.value })} required />
+                <Input label="Number you sent from" placeholder="024 123 4567" value={claim.sender_phone}
+                  onChange={(e) => setClaim({ ...claim, sender_phone: e.target.value })} required />
+                <Input label="Your name" value={claim.sender_name} onChange={(e) => setClaim({ ...claim, sender_name: e.target.value })} />
+              </div>
+            ) : method === "card" ? (
               <Alert tone="info">You'll enter your card on the bank's secure page, then come back here automatically. Visa and Mastercard accepted.</Alert>
             ) : method === "momo" ? (
               <Input label="Mobile money number" placeholder="024 123 4567" value={phone} onChange={(e) => setPhone(e.target.value)} required
@@ -274,7 +309,7 @@ export function CheckoutPage() {
               </Alert>
             )}
             <Button type="submit" className="w-full" size="lg" loading={busy} disabled={method === "wallet" && !user}>
-              Pay {money(data.amount, data.currency)}
+              {method === "direct" ? "I have sent the money" : `Pay ${money(data.amount, data.currency)}`}
             </Button>
           </form>
         )}

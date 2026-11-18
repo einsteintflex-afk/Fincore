@@ -87,3 +87,12 @@ never need a FinCore account: they pay through payment links (with custom questi
 mobile money and, once an acquiring bank is contracted, cards. Receipts carry an HMAC verification code that
 offices check on the public `/verify` page. Customer-wallet features remain in the codebase but are not the
 focus.
+
+**TD-021 "Pay to my MoMo number" (owner decision, 2026-11-18).** Until MoMo merchant/API access and a card
+acquiring agreement exist, payers can send money straight to the owner's own MoMo number and submit the MoMo
+transaction ID; the owner confirms each one against their MoMo SMS/statement, after which FinCore marks the
+payment paid and issues the verifiable receipt. FinCore never holds this money, so it posts **no ledger
+entries** and charges no fee for it; refunds of such payments are recorded, not paid out. Transaction IDs are
+unique per business. In test mode, a live payment link of a business with this enabled offers *only* this
+method (simulated MoMo prompts/cards/wallet are blocked server-side) so no payer can obtain a "paid" receipt
+without real money. The owner's number is business configuration (database), never committed to the code.

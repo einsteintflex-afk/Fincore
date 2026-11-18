@@ -2405,6 +2405,60 @@
     }
    }
   },
+  "/api/v1/businesses/{business_id}/direct-momo": {
+   "put": {
+    "tags": [
+     "Businesses & merchants"
+    ],
+    "summary": "Direct Momo Settings",
+    "description": "'Pay to my MoMo number': payers send money straight to this number; you confirm each payment.",
+    "operationId": "direct_momo_settings_api_v1_businesses__business_id__direct_momo_put",
+    "parameters": [
+     {
+      "name": "business_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Business Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DirectMomoSettingsIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BusinessOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/businesses/{business_id}/settlement-destination": {
    "put": {
     "tags": [
@@ -3161,6 +3215,69 @@
     "responses": {
      "200": {
       "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/businesses/{business_id}/payment-requests/{reference}/direct-momo/review": {
+   "post": {
+    "tags": [
+     "Businesses & merchants"
+    ],
+    "summary": "Review Direct Momo",
+    "description": "Confirm (after checking your MoMo SMS/statement) or reject a payer's direct MoMo payment.",
+    "operationId": "review_direct_momo_api_v1_businesses__business_id__payment_requests__reference__direct_momo_review_post",
+    "parameters": [
+     {
+      "name": "business_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Business Id"
+      }
+     },
+     {
+      "name": "reference",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Reference"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DirectMomoReviewIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PaymentRequestOut"
+        }
+       }
+      }
      },
      "422": {
       "description": "Validation Error",
@@ -4979,6 +5096,57 @@
       "application/json": {
        "schema": {
         "$ref": "#/components/schemas/CheckoutPayWalletIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/checkout/{reference}/direct-momo": {
+   "post": {
+    "tags": [
+     "Checkout (public)"
+    ],
+    "summary": "Claim Direct Momo",
+    "description": "Payer sent the money to the merchant's own MoMo number and gives the transaction ID for confirmation.",
+    "operationId": "claim_direct_momo_api_v1_checkout__reference__direct_momo_post",
+    "parameters": [
+     {
+      "name": "reference",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Reference"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DirectMomoClaimIn"
        }
       }
      }
@@ -8543,6 +8711,11 @@
       "type": "object",
       "title": "Settlement Destination"
      },
+     "direct_momo": {
+      "type": "object",
+      "title": "Direct Momo",
+      "default": {}
+     },
      "owner_user_id": {
       "type": "string",
       "format": "uuid",
@@ -8971,6 +9144,101 @@
      "phone"
     ],
     "title": "DepositIn"
+   },
+   "DirectMomoClaimIn": {
+    "properties": {
+     "transaction_id": {
+      "type": "string",
+      "maxLength": 40,
+      "minLength": 4,
+      "title": "Transaction Id",
+      "description": "MoMo transaction ID from the payer's SMS"
+     },
+     "sender_phone": {
+      "type": "string",
+      "title": "Sender Phone"
+     },
+     "sender_name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 100
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sender Name"
+     }
+    },
+    "type": "object",
+    "required": [
+     "transaction_id",
+     "sender_phone"
+    ],
+    "title": "DirectMomoClaimIn"
+   },
+   "DirectMomoReviewIn": {
+    "properties": {
+     "decision": {
+      "type": "string",
+      "pattern": "^(confirm|reject)$",
+      "title": "Decision"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 300
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     }
+    },
+    "type": "object",
+    "required": [
+     "decision"
+    ],
+    "title": "DirectMomoReviewIn"
+   },
+   "DirectMomoSettingsIn": {
+    "properties": {
+     "enabled": {
+      "type": "boolean",
+      "title": "Enabled"
+     },
+     "phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Phone"
+     },
+     "account_name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 100
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Account Name"
+     }
+    },
+    "type": "object",
+    "required": [
+     "enabled"
+    ],
+    "title": "DirectMomoSettingsIn"
    },
    "Disable2faIn": {
     "properties": {

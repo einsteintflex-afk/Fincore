@@ -75,6 +75,7 @@ class Channel(StrEnum):
     MOBILE_MONEY = "mobile_money"
     BANK = "bank"
     CARD = "card"
+    DIRECT_MOMO = "direct_momo"  # payer sends to the owner's own MoMo number; confirmed manually
 
 
 class MobileNetwork(StrEnum):
@@ -108,6 +109,7 @@ class PaymentStatus(StrEnum):
     CANCELLED = "cancelled"
     REFUNDED = "refunded"
     PARTIALLY_REFUNDED = "partially_refunded"
+    AWAITING_CONFIRMATION = "awaiting_confirmation"  # payer says they sent MoMo directly; owner must confirm
 
 
 class ApiEnvironment(StrEnum):
