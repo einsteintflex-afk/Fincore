@@ -13,3 +13,4 @@ backups/
 *.tsbuildinfo
 var/
 backend/var/
+backend/.env.mtn-sandbox
