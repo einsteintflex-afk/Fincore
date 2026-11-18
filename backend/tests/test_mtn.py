@@ -356,3 +356,40 @@ def test_simulated_payments_are_labelled(make_user):
     u = make_user()
     t = fund(u, "10.00")
     assert t["provider"] == "sandbox" and t["provider_mode"] == "sandbox"  # simulator (mode off): labelled test
+
+
+def test_sandbox_creates_its_own_api_user_from_the_subscription_key(make_user, monkeypatch):
+    """Only the subscription key is configured: FinCore provisions a sandbox API user once and uses it."""
+    created = []
+
+    class Provisioning(FakeMtn):
+        def __call__(self, request):
+            path = request.url.path
+            if path.endswith("/v1_0/apiuser"):
+                created.append(request.headers["X-Reference-Id"])
+                return httpx.Response(201)
+            if path.endswith("/apikey"):
+                return httpx.Response(201, json={"apiKey": "generated-key"})
+            if path.endswith("/collection/token/"):
+                assert request.headers["Authorization"].startswith("Basic ")
+            return super().__call__(request)
+
+    MtnMomoProvider._sandbox_users.clear()
+    monkeypatch.setattr(settings, "mtn_momo_mode", "sandbox")
+    monkeypatch.setattr(settings, "mtn_sandbox_collection_subscription_key", SUB_KEY)
+    fake = Provisioning()
+    override_provider("mtn_momo_sandbox", MtnMomoSandboxProvider(client=httpx.Client(transport=httpx.MockTransport(fake))))
+    try:
+        assert route("mobile_money", "mtn").code == "mtn_momo_sandbox"  # configured without an API user
+        u = make_user()
+        assert deposit(u).json()["status"] == "processing"
+        deposit(u, amount="5.00")
+        assert len(created) == 1  # provisioned once, then reused
+    finally:
+        override_provider("mtn_momo_sandbox", None)
+        MtnMomoProvider._sandbox_users.clear()
+
+
+def test_production_never_auto_provisions(monkeypatch):
+    monkeypatch.setattr(settings, "mtn_production_collection_subscription_key", "prod-sub")
+    assert MtnMomoProvider().is_configured("collection") is False

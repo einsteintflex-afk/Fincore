@@ -20,9 +20,11 @@ Secrets are read from settings only, never logged, and never returned in provide
 from __future__ import annotations
 
 import base64
+import hashlib
 import time
 import uuid
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import httpx
 
@@ -140,15 +142,41 @@ class MtnMomoProvider(PaymentProvider):
     def base_url(self) -> str:
         return self.profile.base_url.rstrip("/")
 
-    def _creds(self, product: str) -> tuple[str, str, str]:
-        c = self.profile.collection if product == "collection" else self.profile.disbursement
-        if not all(c):
+    # Sandbox only: API users created on demand from the subscription key, per process (never written anywhere).
+    _sandbox_users: dict[tuple[str, str], tuple[str, str]] = {}
+
+    def _creds(self, product: str, *, provision: bool = True) -> tuple[str, str, str]:
+        sub, user, key = self.profile.collection if product == "collection" else self.profile.disbursement
+        if sub and not (user and key) and self.mode == "sandbox":
+            # In MTN's sandbox the subscription key is enough: FinCore creates its own API user + key.
+            # Production API users are issued by MTN's partner portal and must be configured explicitly.
+            if not provision:
+                return sub, "auto", "auto"
+            user, key = self._sandbox_api_user(product, sub)
+        if not (sub and user and key):
             raise ProviderNotConfigured(f"MTN MoMo {self.profile.name} {product} credentials are not configured")
-        return c
+        return sub, user, key
+
+    def _sandbox_api_user(self, product: str, sub_key: str) -> tuple[str, str]:
+        cache_key = (product, hashlib.sha256(sub_key.encode()).hexdigest())
+        if cache_key in MtnMomoProvider._sandbox_users:
+            return MtnMomoProvider._sandbox_users[cache_key]
+        uid = str(uuid.uuid4())
+        host = urlparse(self.profile.callback_url).hostname or "example.com"
+        headers = {"Ocp-Apim-Subscription-Key": sub_key}
+        r1 = self.client.post(f"{self.base_url}/v1_0/apiuser", json={"providerCallbackHost": host},
+                              headers={**headers, "X-Reference-Id": uid})
+        r2 = self.client.post(f"{self.base_url}/v1_0/apiuser/{uid}/apikey", headers=headers) \
+            if r1.status_code == 201 else r1
+        if r1.status_code != 201 or r2.status_code != 201:
+            raise ProviderError(f"MTN MoMo sandbox {product} setup failed (HTTP {r2.status_code}); "
+                                "check the subscription key")
+        MtnMomoProvider._sandbox_users[cache_key] = (uid, r2.json()["apiKey"])
+        return MtnMomoProvider._sandbox_users[cache_key]
 
     def is_configured(self, product: str = "collection") -> bool:
         try:
-            self._creds(product)
+            self._creds(product, provision=False)
             return True
         except ProviderNotConfigured:
             return False
