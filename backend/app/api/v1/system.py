@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import FeatureDisabled
 from app.core.middleware import metrics
+from app.models.enums import MAX_DASHBOARD_USERS
 from app.models.ops import SystemSetting
 from app.services.storage import get_storage, read_file_token
 
@@ -49,7 +50,8 @@ def platform(db: Session = Depends(get_db)):
         "support": support.value if support else {},
         "investments_enabled": settings.investments_enabled,
         "mtn_mode": settings.mtn_momo_mode,  # off (simulator) | sandbox (MTN test money) | production
-        "signup_enabled": (db.get(SystemSetting, "signup_enabled") or SystemSetting(value={"enabled": True})).value.get("enabled", True),
+        "signup_enabled": False,  # private: invitation only
+        "max_dashboard_users": MAX_DASHBOARD_USERS,
     }
 
 

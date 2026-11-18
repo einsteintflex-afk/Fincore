@@ -23,16 +23,28 @@ log = logging.getLogger("fincore.webhooks")
 EVENT_TYPES = [
     "charge.success", "charge.failed", "refund.processed", "refund.failed",
     "settlement.paid", "settlement.failed", "payment_link.paid",
+    "payout.successful", "payout.failed",
 ]
 
 
-def emit(db: Session, business_id: uuid.UUID, event_type: str, data: dict, *, environment: str) -> int:
-    """Queue an event for every matching endpoint of the business's apps. Committed with the caller."""
-    endpoints = db.scalars(
-        select(WebhookEndpoint).join(DeveloperApp, DeveloperApp.id == WebhookEndpoint.app_id).where(
-            DeveloperApp.business_id == business_id, DeveloperApp.status == "active",
-            WebhookEndpoint.active.is_(True), WebhookEndpoint.environment == environment)
-    ).all()
+def emit_pr(db: Session, pr, event_type: str, data: dict, *, environment: str) -> int:
+    """Emit an event about a payment request, scoped to the application that created it (if any)."""
+    return emit(db, pr.business_id, event_type, data, environment=environment, app_id=pr.app_id)
+
+
+def emit(db: Session, business_id: uuid.UUID, event_type: str, data: dict, *, environment: str,
+         app_id: uuid.UUID | None = None) -> int:
+    """Queue an event for matching webhook endpoints. Committed with the caller.
+
+    Events about a record created by a specific application (``app_id``) go only to that application's
+    endpoints — never to other apps of the same business. Business-wide events (payment links, hosted checkout,
+    settlements) go to all of the business's active apps."""
+    q = select(WebhookEndpoint).join(DeveloperApp, DeveloperApp.id == WebhookEndpoint.app_id).where(
+        DeveloperApp.business_id == business_id, DeveloperApp.status == "active",
+        WebhookEndpoint.active.is_(True), WebhookEndpoint.environment == environment)
+    if app_id is not None:
+        q = q.where(WebhookEndpoint.app_id == app_id)
+    endpoints = db.scalars(q).all()
     event_id = "evt_" + secrets.token_hex(12)
     payload = {"id": event_id, "type": event_type, "created_at": utcnow().isoformat(),
                "livemode": environment == "live", "data": _jsonable(data)}

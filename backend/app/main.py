@@ -10,7 +10,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
-from app.api.v1 import admin, auth, businesses, callbacks, checkout, developer, gateway, me, system, wallets
+from app.api.v1 import (
+    admin,
+    auth,
+    businesses,
+    callbacks,
+    checkout,
+    console,
+    developer,
+    gateway,
+    me,
+    subscribers,
+    system,
+    team,
+    wallets,
+)
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging
@@ -95,6 +109,10 @@ def create_app() -> FastAPI:
     @app.exception_handler(IntegrityError)
     async def integrity_error(_: Request, exc: IntegrityError):
         log.warning("integrity error", extra={"err": str(exc.orig)[:300]})
+        if "dashboard_seat_limit" in str(exc.orig):
+            return JSONResponse(status_code=409, content={"error": {
+                "code": "seat_limit_reached", "details": None,
+                "message": "All 15 dashboard seats are in use. Deactivate or remove a user first."}})
         return JSONResponse(status_code=409, content={"error": {"code": "conflict",
                                                                 "message": "The request conflicts with existing data",
                                                                 "details": None}})
@@ -109,7 +127,8 @@ def create_app() -> FastAPI:
     app.include_router(system.router)
     p = settings.api_prefix
     for r in (system.public, system.investments, auth.router, me.router, wallets.router, businesses.router,
-              developer.router, gateway.router, checkout.router, callbacks.router, admin.router):
+              developer.router, gateway.router, checkout.router, callbacks.router, admin.router, team.router,
+              subscribers.router, subscribers.gateway, console.router):
         app.include_router(r, prefix=p)
     return app
 

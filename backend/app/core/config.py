@@ -39,7 +39,9 @@ class Settings(BaseSettings):
     max_failed_logins: int = 5
     lockout_minutes: int = 15
 
-    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    # Web dev server plus the origins the packaged apps load from (Capacitor Android/iOS, Tauri Windows/macOS).
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "https://localhost",
+                               "capacitor://localhost", "tauri://localhost", "http://tauri.localhost"]
 
     default_currency: str = "GHS"
     supported_currencies: list[str] = ["GHS"]
@@ -77,6 +79,11 @@ class Settings(BaseSettings):
     mtn_production_disbursement_api_user: str = ""
     mtn_production_disbursement_api_key: str = ""
     mtn_production_callback_url: str = ""
+    # The MTN Disbursement product's primary subscription key for THIS deployment's MTN mode. A sandbox deployment
+    # reads it as the sandbox disbursement key and a production deployment as the production key; the
+    # mode-specific FINCORE_MTN_{SANDBOX,PRODUCTION}_DISBURSEMENT_SUBSCRIPTION_KEY takes precedence when set.
+    # Never shared with Collections (separate MTN products, separate keys).
+    mtn_disbursement_primary_key: str = ""
     # Shared secret that must appear as ?token=... on MTN callback URLs (callbacks are unsigned by MTN).
     mtn_callback_token: str = ""
     # A RequestToPay still pending after this long is treated as expired (payer never approved).
@@ -122,6 +129,11 @@ class Settings(BaseSettings):
     storage_s3_secret_access_key: str = ""
     storage_signed_url_ttl_seconds: int = 300
     kyc_max_upload_bytes: int = 5 * 1024 * 1024
+
+    # --- Database backups (pg_dump custom format). Empty dir disables automatic backups in the worker.
+    backup_dir: str = ""
+    backup_interval_hours: int = 24
+    backup_keep: int = 14
 
     @field_validator("environment")
     @classmethod

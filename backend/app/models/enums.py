@@ -16,10 +16,17 @@ STAFF_ROLES = {UserRole.SUPPORT, UserRole.COMPLIANCE, UserRole.FINANCE, UserRole
 
 
 class UserStatus(StrEnum):
+    INVITED = "invited"          # seat reserved, invitation not yet accepted
     ACTIVE = "active"
     RESTRICTED = "restricted"
     FROZEN = "frozen"
-    CLOSED = "closed"
+    DEACTIVATED = "deactivated"  # can be reactivated by an administrator; holds no seat
+    CLOSED = "closed"            # removed; holds no seat
+
+
+# Statuses that do not occupy one of the dashboard seats.
+SEATLESS_STATUSES = {UserStatus.DEACTIVATED, UserStatus.CLOSED}
+MAX_DASHBOARD_USERS = 15  # including the primary administrator; also enforced by a database trigger
 
 
 class RestrictionType(StrEnum):
@@ -49,6 +56,24 @@ DEBIT_NORMAL = {AccountType.ASSET, AccountType.EXPENSE}
 class EntryDirection(StrEnum):
     DEBIT = "debit"
     CREDIT = "credit"
+
+
+class AppPermission(StrEnum):
+    COLLECTIONS = "collections"
+    PAYOUTS = "payouts"
+    REFUNDS = "refunds"
+    BALANCE = "balance"
+    SUBSCRIBERS = "subscribers"
+
+
+DEFAULT_APP_PERMISSIONS = [AppPermission.COLLECTIONS, AppPermission.REFUNDS, AppPermission.BALANCE,
+                           AppPermission.SUBSCRIBERS]
+
+
+class SubscriberStatus(StrEnum):
+    PENDING = "pending"      # registered by the app, not yet verified
+    ACTIVE = "active"        # verified and allowed
+    INACTIVE = "inactive"    # access withdrawn (sessions revoked)
 
 
 class TxnType(StrEnum):

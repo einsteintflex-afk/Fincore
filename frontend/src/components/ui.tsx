@@ -173,6 +173,13 @@ const statusTone: Record<string, string> = {
   refunded: "bg-violet-50 text-violet-700 ring-violet-600/20",
   partially_refunded: "bg-violet-50 text-violet-700 ring-violet-600/20",
   sandbox: "bg-gold-400/20 text-yellow-800 ring-yellow-600/30",
+  invited: "bg-sky-50 text-sky-700 ring-sky-600/20",
+  inactive: "bg-rose-50 text-rose-700 ring-rose-600/20",
+  deactivated: "bg-slate-100 text-slate-600 ring-slate-500/20",
+  disabled: "bg-slate-100 text-slate-600 ring-slate-500/20",
+  closed: "bg-slate-100 text-slate-600 ring-slate-500/20",
+  live: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+  brand: "bg-brand-50 text-brand-700 ring-brand-600/20",
 };
 
 export function Badge({ children, tone }: { children: ReactNode; tone?: string }) {

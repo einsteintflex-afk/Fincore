@@ -3,8 +3,10 @@
     python -m app.cli seed                       # fee schedule, limits, system accounts, settings
     python -m app.cli create-admin EMAIL NAME    # prompts for password (or FINCORE_ADMIN_PASSWORD)
     python -m app.cli demo-data                  # sample customers + merchant (development only)
+    python -m app.cli backup                      # pg_dump into FINCORE_BACKUP_DIR
+    python -m app.cli verify-backup [name]        # restore into a scratch DB, check the ledger, drop it
+    python -m app.cli restore <name> <new_db>     # restore into a NEW database (never overwrites)
     python -m app.cli reconcile                  # ledger integrity + provider reconciliation
-    python -m app.cli private-mode on|off        # close/open public sign-up
     python -m app.cli worker                     # webhook delivery + provider status polling loop
 """
 
@@ -22,7 +24,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models import User
 from app.models.enums import UserRole
-from app.services import auth, reconciliation
+from app.services import reconciliation
 from app.services.seed import seed_reference_data
 
 
@@ -34,17 +36,21 @@ def cmd_seed(_: argparse.Namespace) -> None:
 def cmd_create_admin(args: argparse.Namespace) -> None:
     password = os.environ.get("FINCORE_ADMIN_PASSWORD") or getpass.getpass("Password: ")
     with SessionLocal() as db:
+        from app.services import team
+
+        has_primary = db.scalar(select(User.id).where(User.is_primary_admin.is_(True))) is not None
         existing = db.scalar(select(User).where(User.email == args.email.lower()))
         if existing:
             existing.role = UserRole.SUPER_ADMIN
+            if not has_primary:
+                existing.is_primary_admin = True
             db.commit()
-            print(f"Promoted existing user {existing.email} to super_admin")
+            print(f"Promoted existing user {existing.email} to super_admin"
+                  + ("" if has_primary else " (primary administrator)"))
             return
-        user = auth.register(db, email=args.email, password=password, full_name=args.name, phone=None,
-                             role=UserRole.SUPER_ADMIN)
-        user.email_verified = True
-        db.commit()
-        print(f"Created super_admin {user.email}")
+        user = team.create_user(db, email=args.email, password=password, full_name=args.name,
+                                role=UserRole.SUPER_ADMIN, primary=not has_primary)
+        print(f"Created super_admin {user.email}" + ("" if has_primary else " (primary administrator)"))
 
 
 def cmd_demo_data(_: argparse.Namespace) -> None:
@@ -61,10 +67,14 @@ def cmd_demo_data(_: argparse.Namespace) -> None:
         if db.scalar(select(User).where(User.email == "admin@fincore.demo")):
             print("Demo data already present")
             return
-        admin = auth.register(db, email="admin@fincore.demo", password=pw, full_name="FinCore Admin", phone=None,
-                              role=UserRole.SUPER_ADMIN)
-        ama = auth.register(db, email="ama@fincore.demo", password=pw, full_name="Ama Owusu", phone="0241234567")
-        kofi = auth.register(db, email="kofi@fincore.demo", password=pw, full_name="Kofi Mensah", phone="0201234567")
+        from app.services import team
+
+        has_primary = db.scalar(select(User.id).where(User.is_primary_admin.is_(True))) is not None
+        admin = team.create_user(db, email="admin@fincore.demo", password=pw, full_name="FinCore Admin",
+                                 role=UserRole.SUPER_ADMIN, primary=not has_primary)
+        ama = team.create_user(db, email="ama@fincore.demo", password=pw, full_name="Ama Owusu", phone="0241234567")
+        kofi = team.create_user(db, email="kofi@fincore.demo", password=pw, full_name="Kofi Mensah",
+                                phone="0201234567")
         for u in (admin, ama, kofi):
             u.email_verified, u.kyc_tier = True, 2
         db.commit()
@@ -91,16 +101,29 @@ def cmd_demo_data(_: argparse.Namespace) -> None:
         print("  admin@fincore.demo (super admin), ama@fincore.demo (customer), kofi@fincore.demo (merchant owner)")
 
 
-def cmd_private_mode(args: argparse.Namespace) -> None:
-    """Private mode = public sign-up closed. Staff accounts are then created from the admin console."""
-    from app.models.ops import SystemSetting
+def cmd_backup(_: argparse.Namespace) -> None:
+    from app.services import backups
 
-    with SessionLocal() as db:
-        s = db.get(SystemSetting, "signup_enabled") or SystemSetting(key="signup_enabled", value={})
-        s.value = {"enabled": args.state == "off"}
-        db.merge(s)
-        db.commit()
-    print(f"Private mode {args.state}: public sign-up {'closed' if args.state == 'on' else 'open'}")
+    print(json.dumps(backups.create_backup()))
+
+
+def cmd_verify_backup(args: argparse.Namespace) -> None:
+    from app.services import backups
+
+    name = args.backup or (backups.last_backup_info() or {}).get("name")
+    if not name:
+        sys.exit("No backup found")
+    result = backups.verify_backup(name)
+    print(json.dumps(result, default=str))
+    if not result["restored_ok"]:
+        sys.exit(2)
+
+
+def cmd_restore(args: argparse.Namespace) -> None:
+    from app.services import backups
+
+    print(json.dumps(backups.restore_to(args.backup, args.database)))
+    print(f"Restored into NEW database '{args.database}'. Point FINCORE_DATABASE_URL at it to switch over.")
 
 
 def cmd_reconcile(_: argparse.Namespace) -> None:
@@ -128,9 +151,14 @@ def main(argv: list[str] | None = None) -> None:
     a.set_defaults(fn=cmd_create_admin)
     sub.add_parser("demo-data").set_defaults(fn=cmd_demo_data)
     sub.add_parser("reconcile").set_defaults(fn=cmd_reconcile)
-    pm = sub.add_parser("private-mode")
-    pm.add_argument("state", choices=["on", "off"])
-    pm.set_defaults(fn=cmd_private_mode)
+    sub.add_parser("backup").set_defaults(fn=cmd_backup)
+    vb = sub.add_parser("verify-backup")
+    vb.add_argument("backup", nargs="?")
+    vb.set_defaults(fn=cmd_verify_backup)
+    rs = sub.add_parser("restore")
+    rs.add_argument("backup")
+    rs.add_argument("database", help="a NEW database name (existing databases are never overwritten)")
+    rs.set_defaults(fn=cmd_restore)
     w = sub.add_parser("worker")
     w.add_argument("--interval", type=float, default=5.0)
     w.add_argument("--once", action="store_true")

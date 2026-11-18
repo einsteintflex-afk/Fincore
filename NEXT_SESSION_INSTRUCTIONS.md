@@ -3,7 +3,7 @@
 The owner will say: **"CONTINUE FINCORE FROM THE LAST SAVED DEVELOPMENT STATE."** Do this:
 
 ## 1. Orient (5 minutes)
-Read, in order: `PROJECT_STATUS.md`, `CURRENT_TASK.md`, `DEVELOPMENT_ROADMAP.md`, `BLOCKERS.md`,
+Read, in order: `FINCORE_MASTER_PROGRESS.md`, `PROJECT_STATUS.md`, `CURRENT_TASK.md`, `DEVELOPMENT_ROADMAP.md`, `BLOCKERS.md`,
 `TECHNICAL_DECISIONS.md`, then skim `ARCHITECTURE.md`. Run `git log --oneline | head -20`.
 Work on branch `claude/fincore-fintech-platform-aia7tk` (create from the default branch if missing;
 if its PR was merged, restart the branch from the default branch).
@@ -18,9 +18,9 @@ su postgres -c "psql -c 'CREATE DATABASE fincore_test OWNER fincore;'" || true
 python3 -m venv .venv && .venv/bin/pip install -q -r backend/requirements-dev.txt
 cd backend
 ../.venv/bin/ruff check app tests
-../.venv/bin/python -m pytest                 # expect all green (173+)
+../.venv/bin/python -m pytest                 # expect all green (206+)
 ../.venv/bin/alembic upgrade head && ../.venv/bin/alembic check
-../.venv/bin/python -m app.cli demo-data      # demo users, password Demo!Pass2026
+../.venv/bin/python -m app.cli demo-data      # demo users, password Demo!Pass2026 (max 15 accounts in total)
 cd ../frontend && npm install && npm run build && npm test
 ```
 If anything fails, fixing it is the first task.
@@ -28,7 +28,8 @@ If anything fails, fixing it is the first task.
 To run the stack: `cd backend && ../.venv/bin/uvicorn app.main:app --port 8000` and
 `cd frontend && npx vite --port 5173`. Browser checks use the preinstalled Playwright
 (`require('playwright')`); block `fonts.googleapis.com` in scripts (no external network) and use fixed
-waits instead of `networkidle`. `frontend/e2e/journey.cjs` is a working example.
+waits instead of `networkidle`. `frontend/e2e/console.cjs` is a working example. Native builds: see docs/MOBILE_DESKTOP.md (Android SDK at
+/opt/android-sdk in the cloud container; needs dl.google.com allowed).
 
 ## 3. Continue
 Start with the **Next task** in `CURRENT_TASK.md`, then work down Phase 3 of `DEVELOPMENT_ROADMAP.md`.
@@ -40,6 +41,8 @@ Cycle: plan → build → test → debug → verify (tests + browser where UI ch
   ledger or audit rows (triggers will block it anyway) — correct with compensating journals.
 - Outflows are two-phase (hold → provider → complete/release). Commit the hold before calling a provider.
 - Keep `FINCORE_LIVE_PAYMENTS_ENABLED=false`; never present simulated payments as real.
+- Never exceed 15 dashboard accounts or bypass the seat/primary-admin triggers; subscribers are not users.
+- The withdrawal fee is deducted from the amount and booked only on success; never apply it to other types.
 - New money endpoints accept `Idempotency-Key`; add tests for concurrency where relevant.
 - Ask the owner only for credentials, paid services, legal/regulatory decisions, or business-model changes
   (record them in BLOCKERS.md and carry on).

@@ -164,11 +164,29 @@ def maybe_run_aml() -> dict | None:
         return aml.run_scan(db, now)
 
 
+def maybe_backup(now: datetime | None = None) -> str | None:
+    """Automatic database backup every FINCORE_BACKUP_INTERVAL_HOURS (when FINCORE_BACKUP_DIR is set)."""
+    from app.core.config import settings
+    from app.services import backups
+
+    if not settings.backup_dir:
+        return None
+    now = now or utcnow()
+    last = backups.last_backup_info()
+    if last and now - datetime.fromisoformat(last["created_at"]) < timedelta(hours=settings.backup_interval_hours):
+        return None
+    try:
+        return backups.create_backup()["name"]
+    except backups.BackupError:
+        log.exception("automatic backup failed")
+        return None
+
+
 def tick(client: httpx.Client) -> dict:
     with SessionLocal() as db:
         hooks = webhooks.deliver_due(db, client)
     return {"webhooks": hooks, "polled": poll_in_flight(), "expired": expire_checkouts() + expire_card_sessions(), "outbox": drain_outbox(),
-            "settlements": run_scheduled_settlements(), "aml": maybe_run_aml()}
+            "settlements": run_scheduled_settlements(), "aml": maybe_run_aml(), "backup": maybe_backup()}
 
 
 def run_forever(interval: float = 5.0, once: bool = False) -> None:

@@ -5,6 +5,7 @@ import {
   ArrowUpFromLine,
   BadgeCheck,
   Bell,
+  Boxes,
   BookOpen,
   Briefcase,
   Building2,
@@ -86,7 +87,18 @@ function developerNav(id: string): NavItem[] {
   ];
 }
 
-function adminNav(): NavItem[] {
+/** The dashboard: exactly five primary sections. Everything else lives under Settings. */
+export function consoleNav(): NavItem[] {
+  return [
+    { to: "/console", label: "Overview", icon: i(Gauge), end: true },
+    { to: "/console/applications", label: "Applications", icon: i(Boxes) },
+    { to: "/console/transactions", label: "Transactions", icon: i(ReceiptText) },
+    { to: "/console/payments", label: "Payments", icon: i(CreditCard) },
+    { to: "/console/settings", label: "Settings", icon: i(Settings) },
+  ];
+}
+
+export function adminNav(): NavItem[] {
   return [
     { to: "/admin", label: "Overview", icon: i(Gauge), end: true },
     { to: "/admin/users", label: "Customers", icon: i(Users) },
@@ -113,9 +125,9 @@ function PortalSwitcher() {
     { key: "app", label: "Personal", to: "/app", icon: <Wallet className="h-4 w-4" /> },
     { key: "merchant", label: "Business", to: first ? `/merchant/${first}` : "/merchant", icon: <Briefcase className="h-4 w-4" /> },
     { key: "developer", label: "Developers", to: first ? `/developer/${first}` : "/merchant", icon: <Code2 className="h-4 w-4" /> },
-    ...(isStaff(user) ? [{ key: "admin", label: "Admin console", to: "/admin", icon: <ShieldCheck className="h-4 w-4" /> }] : []),
+    ...(isStaff(user) ? [{ key: "console", label: "Dashboard", to: "/console", icon: <ShieldCheck className="h-4 w-4" /> }] : []),
   ];
-  const current = portals.find((p) => loc.pathname.startsWith("/" + p.key)) ?? portals[0];
+  const current = portals.find((p) => loc.pathname.startsWith("/" + p.key) || (p.key === "console" && loc.pathname.startsWith("/admin"))) ?? portals[0];
   return (
     <div className="relative">
       <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15">
@@ -219,16 +231,16 @@ export function SandboxBanner() {
   return null;
 }
 
-export function AppShell({ portal }: { portal: "app" | "merchant" | "developer" | "admin" }) {
+export function AppShell({ portal }: { portal: "app" | "merchant" | "developer" | "console" }) {
   const { user, logout } = useAuth();
   const { bizId } = useParams();
   const [mobileOpen, setMobileOpen] = useState(false);
   const items =
-    portal === "app" ? customerNav() : portal === "merchant" ? merchantNav(bizId!) : portal === "developer" ? developerNav(bizId!) : adminNav();
+    portal === "app" ? customerNav() : portal === "merchant" ? merchantNav(bizId!) : portal === "developer" ? developerNav(bizId!) : consoleNav();
 
   const sidebar = (
     <div className="flex h-full flex-col bg-ink-900 px-3 py-4">
-      <Link to="/app" className="mb-5 flex items-center gap-2 px-2">
+      <Link to={portal === "console" ? "/console" : "/app"} className="mb-5 flex items-center gap-2 px-2">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-700 font-bold text-gold-400">F</span>
         <span className="text-lg font-semibold tracking-tight text-white">FinCore</span>
       </Link>
@@ -284,7 +296,7 @@ export function AppShell({ portal }: { portal: "app" | "merchant" | "developer" 
             <button className="rounded-md p-2 text-slate-600 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
               <Menu className="h-5 w-5" />
             </button>
-            <span className="text-sm font-medium capitalize text-slate-500">{portal === "app" ? "Personal" : portal}</span>
+            <span className="text-sm font-medium capitalize text-slate-500">{portal === "app" ? "Personal" : portal === "console" ? "Dashboard" : portal}</span>
             <div className="flex items-center gap-2">
               <NotificationsBell />
               <span className="hidden h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800 sm:flex">

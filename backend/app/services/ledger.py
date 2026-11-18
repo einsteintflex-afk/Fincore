@@ -35,6 +35,7 @@ class SystemAccount:
     """Purposes of platform-owned ledger accounts (one per currency)."""
 
     FEE_REVENUE = ("FEE_REVENUE", AccountType.REVENUE, False, "Fee revenue")
+    WITHDRAWAL_FEE_REVENUE = ("WITHDRAWAL_FEE_REVENUE", AccountType.REVENUE, False, "Withdrawal fee revenue")
     PENDING_PAYOUTS = ("PENDING_PAYOUTS", AccountType.LIABILITY, False, "Funds held for in-flight payouts")
     SUSPENSE = ("SUSPENSE", AccountType.LIABILITY, True, "Suspense / unallocated funds")
     ADJUSTMENTS = ("ADJUSTMENTS", AccountType.EXPENSE, True, "Manual adjustments & write-offs")

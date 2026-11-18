@@ -17,6 +17,7 @@ from sqlalchemy import select, text  # noqa: E402
 from app.core.database import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Base, OutboundMessage, User  # noqa: E402
+from app.services import team  # noqa: E402
 from app.services.seed import seed_reference_data  # noqa: E402
 
 PASSWORD = "Sup3rSecret!pw"
@@ -92,16 +93,17 @@ def make_user(client, db):
     def _make(role: str = "customer", kyc_tier: int = 1, email: str | None = None, phone: str | None = None) -> Actor:
         counter["n"] += 1
         email = email or f"user{counter['n']}-{uuid.uuid4().hex[:6]}@example.com"
-        r = client.post("/api/v1/auth/register", json={"email": email, "password": PASSWORD,
-                                                       "full_name": f"Test User {counter['n']}", "phone": phone})
-        assert r.status_code == 201, r.text
+        # No public registration: accounts are created by the team service (same path as invitations/CLI),
+        # which is bound by the 15-seat limit.
         with SessionLocal() as s:
-            u = s.scalar(select(User).where(User.email == email))
-            u.role, u.kyc_tier = role, kyc_tier
-            s.commit()
+            has_primary = s.scalar(select(User.id).where(User.is_primary_admin.is_(True))) is not None
+            u = team.create_user(s, email=email, password=PASSWORD, full_name=f"Test User {counter['n']}",
+                                 phone=phone, role=role, kyc_tier=kyc_tier,
+                                 primary=role == "super_admin" and not has_primary)
+            uid = u.id
         r = client.post("/api/v1/auth/login", json={"email": email, "password": PASSWORD})
         assert r.status_code == 200, r.text
-        return Actor(client, email, str(u.id), r.json()["access_token"])
+        return Actor(client, email, str(uid), r.json()["access_token"])
 
     return _make
 

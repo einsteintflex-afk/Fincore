@@ -32,7 +32,7 @@ from app.schemas.common import (
     WalletOut,
     WithdrawIn,
 )
-from app.services import pdf
+from app.services import pdf, withdrawal_fee
 from app.services import wallets as wsvc
 from app.services.audit import audit
 from app.services.ghana import BANKS, NETWORK_NAMES, detect_network, normalize_msisdn, validate_bank
@@ -171,6 +171,13 @@ def deposit(body: DepositIn, idempotency_key: str | None = IdempotencyKey, user:
     return run_idempotent(db, f"user:{user.id}:deposit", idempotency_key, body.model_dump(), go)
 
 
+@router.get("/withdrawals/quote", summary="Show the withdrawal fee before confirming: requested amount, fee %, "
+            "fee, net amount the recipient receives and total debited")
+def withdrawal_quote(amount: str, currency: str = "GHS", user: User = Depends(current_user),
+                     db: Session = Depends(get_db)):
+    return withdrawal_fee.quote(db, amount, currency.upper())
+
+
 @router.post("/withdrawals", response_model=TransactionOut, status_code=201,
              dependencies=[Depends(money_movement_allowed)])
 def withdraw(body: WithdrawIn, idempotency_key: str | None = IdempotencyKey, user: User = Depends(current_user),
@@ -178,7 +185,8 @@ def withdraw(body: WithdrawIn, idempotency_key: str | None = IdempotencyKey, use
     def go():
         t = TransactionService(db).withdraw(
             user, body.wallet_id, body.amount, channel=body.channel, phone=body.phone, bank_code=body.bank_code,
-            account_number=body.account_number, account_name=body.account_name, description=body.description or "")
+            account_number=body.account_number, account_name=body.account_name, description=body.description or "",
+            expected_fee_percent=body.expected_fee_percent)
         db.refresh(t)
         return txn_out(t, {body.wallet_id})
     return run_idempotent(db, f"user:{user.id}:withdrawal", idempotency_key, body.model_dump(), go)

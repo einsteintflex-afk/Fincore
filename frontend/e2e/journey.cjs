@@ -7,15 +7,14 @@ const { chromium } = require('playwright');
   await page.route(/fonts\.(googleapis|gstatic)/, r => r.abort());
   const errs = []; page.on('pageerror', e => errs.push(e.message));
   const step = async (name, fn) => { try { await fn(); console.log('✓', name); } catch (e) { console.log('✗', name, e.message.split('\n')[0]); await page.screenshot({ path: process.argv[2] + '/fail.png' }); throw e; } };
-  const email = `yaw${Date.now()}@example.com`;
-  await step('register', async () => {
-    await page.goto('http://localhost:5173/register');
-    await page.getByLabel('Full name').fill('Yaw Darko');
-    await page.getByLabel('Email').fill(email);
-    await page.getByLabel('Mobile number').fill('024' + String(Date.now()).slice(-7)); // unique per run
-    await page.getByLabel('Password').fill('Str0ngPass!word');
-    await page.getByRole('button', { name: 'Create account' }).click();
-    await page.getByText('Hello, Yaw').waitFor({ timeout: 8000 });
+  // No public sign-up: an administrator invites the user (Settings → Users) and passes the link in INVITE_LINK.
+  await step('accept invitation', async () => {
+    if (!process.env.INVITE_LINK) throw new Error('set INVITE_LINK to an invitation link from Settings → Users');
+    await page.goto(process.env.INVITE_LINK.replace(/^https?:\/\/[^/]+/, 'http://localhost:5173'));
+    await page.getByLabel('Password', { exact: true }).fill('Str0ngPass!word');
+    await page.getByLabel('Confirm password').fill('Str0ngPass!word');
+    await page.getByRole('button', { name: 'Set password and sign in' }).click();
+    await page.getByText('Hello, ').first().waitFor({ timeout: 8000 });
   });
   await step('deposit 150 via momo', async () => {
     await page.goto('http://localhost:5173/app/deposit');

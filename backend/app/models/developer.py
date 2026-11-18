@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base, Timestamps, UUIDPk
@@ -17,6 +17,11 @@ class DeveloperApp(UUIDPk, Timestamps, Base):
     name: Mapped[str] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="active")
+    # What this application may do through the API (see AppPermission). Payouts must be granted explicitly.
+    permissions: Mapped[list] = mapped_column(JSON, default=lambda: ["collections", "refunds", "balance",
+                                                                     "subscribers"])
+    # When on, collection and payout calls must carry a valid X-Subscriber-Token for a verified, active subscriber.
+    require_verified_subscribers: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class ApiKey(UUIDPk, Timestamps, Base):
@@ -72,3 +77,35 @@ class ApiRequestLog(UUIDPk, Timestamps, Base):
     latency_ms: Mapped[int] = mapped_column(Integer)
     ip_address: Mapped[str | None] = mapped_column(String(64))
     meta: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+
+
+class AppSubscriber(UUIDPk, Timestamps, Base):
+    """A customer of a connected application (e.g. a Nurses & Midwives Hub subscriber).
+
+    Not a FinCore dashboard user: subscribers never sign in to FinCore and do not count toward the dashboard seats.
+    """
+
+    __tablename__ = "app_subscribers"
+    __table_args__ = (UniqueConstraint("app_id", "external_id", name="uq_subscriber_app_external"),)
+
+    app_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("developer_apps.id", ondelete="CASCADE"), index=True)
+    external_id: Mapped[str] = mapped_column(String(128))  # the application's own user id
+    display_name: Mapped[str | None] = mapped_column(String(200))
+    phone: Mapped[str | None] = mapped_column(String(20))
+    email: Mapped[str | None] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    verification_method: Mapped[str | None] = mapped_column(String(32))  # sms_code | admin
+    # Bumped whenever access is withdrawn: every subscriber token issued before becomes invalid at once.
+    token_version: Mapped[int] = mapped_column(Integer, default=1)
+    deactivated_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class SubscriberVerification(UUIDPk, Timestamps, Base):
+    __tablename__ = "subscriber_verifications"
+
+    subscriber_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_subscribers.id", ondelete="CASCADE"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

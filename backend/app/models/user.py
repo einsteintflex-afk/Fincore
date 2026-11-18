@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, Timestamps, UUIDPk
@@ -12,6 +12,8 @@ from app.models.enums import KycStatus, UserRole, UserStatus
 
 class User(UUIDPk, Timestamps, Base):
     __tablename__ = "users"
+    __table_args__ = (Index("uq_users_single_primary_admin", "is_primary_admin", unique=True,
+                            postgresql_where=text("is_primary_admin")),)
 
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     phone: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
@@ -27,6 +29,11 @@ class User(UUIDPk, Timestamps, Base):
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The owner's account. Exactly one may exist (partial unique index); a database trigger stops it from being
+    # deactivated, removed, demoted or deleted.
+    is_primary_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    invited_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", name="fk_users_invited_by"))
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     sessions: Mapped[list[UserSession]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
@@ -122,3 +129,16 @@ class OutboundMessage(UUIDPk, Timestamps, Base):
     status: Mapped[str] = mapped_column(String(16), default="queued")
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class UserInvitation(UUIDPk, Timestamps, Base):
+    """A pending invitation to the private dashboard. The invited user row (status ``invited``) already holds a seat."""
+
+    __tablename__ = "user_invitations"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    invited_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

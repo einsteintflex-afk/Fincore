@@ -111,6 +111,7 @@
      "Authentication"
     ],
     "summary": "Register",
+    "description": "FinCore is private: there is no public registration. Accounts are created by invitation only\n(Settings \u2192 Users). Customers of connected applications are subscribers, managed through the API.",
     "operationId": "register_api_v1_auth_register_post",
     "requestBody": {
      "content": {
@@ -123,7 +124,87 @@
      "required": true
     },
     "responses": {
-     "201": {
+     "403": {
+      "description": "Public registration is disabled",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/invitation": {
+   "get": {
+    "tags": [
+     "Authentication"
+    ],
+    "summary": "Invitation",
+    "description": "Show who an invitation link is for (before the person sets a password).",
+    "operationId": "invitation_api_v1_auth_invitation_get",
+    "parameters": [
+     {
+      "name": "token",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Token"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/invitation/accept": {
+   "post": {
+    "tags": [
+     "Authentication"
+    ],
+    "summary": "Accept Invitation",
+    "operationId": "accept_invitation_api_v1_auth_invitation_accept_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AcceptInvitationIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
       "description": "Successful Response",
       "content": {
        "application/json": {
@@ -513,7 +594,7 @@
      "content": {
       "application/json": {
        "schema": {
-        "$ref": "#/components/schemas/CodeIn"
+        "$ref": "#/components/schemas/app__schemas__common__CodeIn"
        }
       }
      },
@@ -1590,6 +1671,56 @@
         "schema": {
          "$ref": "#/components/schemas/TransactionOut"
         }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/withdrawals/quote": {
+   "get": {
+    "tags": [
+     "Wallets & transactions"
+    ],
+    "summary": "Show the withdrawal fee before confirming: requested amount, fee %, fee, net amount the recipient receives and total debited",
+    "operationId": "withdrawal_quote_api_v1_withdrawals_quote_get",
+    "parameters": [
+     {
+      "name": "amount",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Amount"
+      }
+     },
+     {
+      "name": "currency",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "GHS",
+       "title": "Currency"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
        }
       }
      },
@@ -4548,6 +4679,24 @@
        "title": "Idempotency-Key"
       },
       "description": "Unique key so a retried request is executed at most once"
+     },
+     {
+      "name": "X-Subscriber-Token",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Required when the application only serves verified subscribers",
+       "title": "X-Subscriber-Token"
+      },
+      "description": "Required when the application only serves verified subscribers"
      }
     ],
     "requestBody": {
@@ -4813,6 +4962,174 @@
         "schema": {
          "$ref": "#/components/schemas/PaymentRequestOut"
         }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/gateway/payouts/quote": {
+   "get": {
+    "tags": [
+     "Payment gateway API (API key)"
+    ],
+    "summary": "Withdrawal fee breakdown for a payout: fee %, fee, net to recipient, total debited",
+    "operationId": "payout_quote_api_v1_gateway_payouts_quote_get",
+    "parameters": [
+     {
+      "name": "amount",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Amount"
+      }
+     },
+     {
+      "name": "currency",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "GHS",
+       "title": "Currency"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/gateway/payouts": {
+   "post": {
+    "tags": [
+     "Payment gateway API (API key)"
+    ],
+    "summary": "Pay out to a mobile money number from your application's balance. The withdrawal fee is deducted from `amount`; the recipient receives `net_amount`. Final status comes from the provider (poll GET /gateway/payouts/{reference} or use the payout.* webhooks).",
+    "operationId": "create_payout_api_v1_gateway_payouts_post",
+    "parameters": [
+     {
+      "name": "Idempotency-Key",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "maxLength": 128
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Unique key so a retried request is executed at most once",
+       "title": "Idempotency-Key"
+      },
+      "description": "Unique key so a retried request is executed at most once"
+     },
+     {
+      "name": "X-Subscriber-Token",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Required when the application only serves verified subscribers",
+       "title": "X-Subscriber-Token"
+      },
+      "description": "Required when the application only serves verified subscribers"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PayoutIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/gateway/payouts/{reference}": {
+   "get": {
+    "tags": [
+     "Payment gateway API (API key)"
+    ],
+    "summary": "Payout status (refreshed from the provider while processing)",
+    "operationId": "get_payout_api_v1_gateway_payouts__reference__get",
+    "parameters": [
+     {
+      "name": "reference",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Reference"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
        }
       }
      },
@@ -5716,7 +6033,7 @@
      "Administration"
     ],
     "summary": "Create User",
-    "description": "Create an account (e.g. staff while public sign-up is closed). The person sets their own password from\nan emailed link; nobody else ever knows it.",
+    "description": "Invite an account (same as ``POST /admin/team/invitations``). The person sets their own password from\nthe invitation link; nobody else ever knows it. Bound by the 15-seat limit.",
     "operationId": "create_user_api_v1_admin_users_post",
     "requestBody": {
      "required": true,
@@ -7797,10 +8114,1521 @@
      }
     }
    }
+  },
+  "/api/v1/admin/team": {
+   "get": {
+    "tags": [
+     "Settings: users (dashboard seats)"
+    ],
+    "summary": "List Team",
+    "operationId": "list_team_api_v1_admin_team_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/team/invitations": {
+   "post": {
+    "tags": [
+     "Settings: users (dashboard seats)"
+    ],
+    "summary": "Invite",
+    "description": "Reserve a seat and create an invitation. The returned link is also emailed; share it privately.",
+    "operationId": "invite_api_v1_admin_team_invitations_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/InviteIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/team/{user_id}/invitation/resend": {
+   "post": {
+    "tags": [
+     "Settings: users (dashboard seats)"
+    ],
+    "summary": "Resend",
+    "operationId": "resend_api_v1_admin_team__user_id__invitation_resend_post",
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "User Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/team/{user_id}/deactivate": {
+   "post": {
+    "tags": [
+     "Settings: users (dashboard seats)"
+    ],
+    "summary": "Deactivate",
+    "operationId": "deactivate_api_v1_admin_team__user_id__deactivate_post",
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "User Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReasonIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/team/{user_id}/activate": {
+   "post": {
+    "tags": [
+     "Settings: users (dashboard seats)"
+    ],
+    "summary": "Activate",
+    "operationId": "activate_api_v1_admin_team__user_id__activate_post",
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "User Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/team/{user_id}/remove": {
+   "post": {
+    "tags": [
+     "Settings: users (dashboard seats)"
+    ],
+    "summary": "Remove",
+    "operationId": "remove_api_v1_admin_team__user_id__remove_post",
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "User Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReasonIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/team/{user_id}/role": {
+   "post": {
+    "tags": [
+     "Settings: users (dashboard seats)"
+    ],
+    "summary": "Change Role",
+    "operationId": "change_role_api_v1_admin_team__user_id__role_post",
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "User Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RoleIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/team/{user_id}/sessions/revoke": {
+   "post": {
+    "tags": [
+     "Settings: users (dashboard seats)"
+    ],
+    "summary": "Revoke Sessions",
+    "operationId": "revoke_sessions_api_v1_admin_team__user_id__sessions_revoke_post",
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "User Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/team/{user_id}/activity": {
+   "get": {
+    "tags": [
+     "Settings: users (dashboard seats)"
+    ],
+    "summary": "Activity",
+    "operationId": "activity_api_v1_admin_team__user_id__activity_get",
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "User Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/subscribers": {
+   "get": {
+    "tags": [
+     "Settings: subscriber verification"
+    ],
+    "summary": "Admin List",
+    "operationId": "admin_list_api_v1_admin_subscribers_get",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "uuid"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "App Id"
+      }
+     },
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     },
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1,
+       "title": "Page"
+      }
+     },
+     {
+      "name": "page_size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 200,
+       "minimum": 1,
+       "default": 50,
+       "title": "Page Size"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/subscribers/{subscriber_id}": {
+   "post": {
+    "tags": [
+     "Settings: subscriber verification"
+    ],
+    "summary": "Admin Action",
+    "operationId": "admin_action_api_v1_admin_subscribers__subscriber_id__post",
+    "parameters": [
+     {
+      "name": "subscriber_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Subscriber Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SubscriberActionIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/gateway/subscribers": {
+   "post": {
+    "tags": [
+     "Payment gateway API: subscribers (API key)"
+    ],
+    "summary": "Register (or update) a subscriber of your application",
+    "operationId": "register_api_v1_gateway_subscribers_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SubscriberIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/gateway/subscribers/{external_id}": {
+   "get": {
+    "tags": [
+     "Payment gateway API: subscribers (API key)"
+    ],
+    "summary": "Status",
+    "operationId": "status_api_v1_gateway_subscribers__external_id__get",
+    "parameters": [
+     {
+      "name": "external_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "External Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/gateway/subscribers/{external_id}/verification": {
+   "post": {
+    "tags": [
+     "Payment gateway API: subscribers (API key)"
+    ],
+    "summary": "Send a 6-digit verification code to the subscriber's phone",
+    "operationId": "start_api_v1_gateway_subscribers__external_id__verification_post",
+    "parameters": [
+     {
+      "name": "external_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "External Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/gateway/subscribers/{external_id}/verification/confirm": {
+   "post": {
+    "tags": [
+     "Payment gateway API: subscribers (API key)"
+    ],
+    "summary": "Confirm the code the subscriber received",
+    "operationId": "confirm_api_v1_gateway_subscribers__external_id__verification_confirm_post",
+    "parameters": [
+     {
+      "name": "external_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "External Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/app__api__v1__subscribers__CodeIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/gateway/subscribers/{external_id}/token": {
+   "post": {
+    "tags": [
+     "Payment gateway API: subscribers (API key)"
+    ],
+    "summary": "Issue a subscriber token (verified, active subscribers only)",
+    "operationId": "token_api_v1_gateway_subscribers__external_id__token_post",
+    "parameters": [
+     {
+      "name": "external_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "External Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/gateway/subscribers/access/check": {
+   "get": {
+    "tags": [
+     "Payment gateway API: subscribers (API key)"
+    ],
+    "summary": "Check a subscriber token: 200 with the subscriber, or 401/403 with the reason",
+    "operationId": "check_api_v1_gateway_subscribers_access_check_get",
+    "parameters": [
+     {
+      "name": "x-subscriber-token",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Subscriber-Token"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/overview": {
+   "get": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Overview",
+    "operationId": "overview_api_v1_console_overview_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/applications": {
+   "get": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "List Applications",
+    "operationId": "list_applications_api_v1_console_applications_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Create Application",
+    "operationId": "create_application_api_v1_console_applications_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AppCreateIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/applications/{app_id}": {
+   "get": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Get Application",
+    "operationId": "get_application_api_v1_console_applications__app_id__get",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "patch": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Update Application",
+    "operationId": "update_application_api_v1_console_applications__app_id__patch",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AppUpdateIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/applications/{app_id}/transactions": {
+   "get": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Application Transactions",
+    "operationId": "application_transactions_api_v1_console_applications__app_id__transactions_get",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 200,
+       "default": 50,
+       "title": "Limit"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/applications/{app_id}/keys": {
+   "get": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "List Keys",
+    "operationId": "list_keys_api_v1_console_applications__app_id__keys_get",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ApiKeyOut"
+         },
+         "title": "Response List Keys Api V1 Console Applications  App Id  Keys Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Generate an API key. The secret is shown once.",
+    "operationId": "create_key_api_v1_console_applications__app_id__keys_post",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/KeyIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApiKeyOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/applications/{app_id}/keys/{key_id}/rotate": {
+   "post": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Rotate: revoke this key and issue a replacement in the same environment",
+    "operationId": "rotate_key_api_v1_console_applications__app_id__keys__key_id__rotate_post",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     },
+     {
+      "name": "key_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Key Id"
+      }
+     }
+    ],
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApiKeyOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/applications/{app_id}/keys/{key_id}/revoke": {
+   "post": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Revoke Key",
+    "operationId": "revoke_key_api_v1_console_applications__app_id__keys__key_id__revoke_post",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     },
+     {
+      "name": "key_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Key Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApiKeyOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/applications/{app_id}/webhooks": {
+   "get": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "List Webhooks",
+    "operationId": "list_webhooks_api_v1_console_applications__app_id__webhooks_get",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/WebhookOut"
+         },
+         "title": "Response List Webhooks Api V1 Console Applications  App Id  Webhooks Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Create Webhook",
+    "operationId": "create_webhook_api_v1_console_applications__app_id__webhooks_post",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/WebhookIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WebhookOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/applications/{app_id}/webhooks/{endpoint_id}": {
+   "delete": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Delete Webhook",
+    "operationId": "delete_webhook_api_v1_console_applications__app_id__webhooks__endpoint_id__delete",
+    "parameters": [
+     {
+      "name": "app_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "App Id"
+      }
+     },
+     {
+      "name": "endpoint_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Endpoint Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/payments": {
+   "get": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Payments Status",
+    "operationId": "payments_status_api_v1_console_payments_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/settings/withdrawal-fee": {
+   "get": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Get Withdrawal Fee",
+    "operationId": "get_withdrawal_fee_api_v1_console_settings_withdrawal_fee_get",
+    "parameters": [
+     {
+      "name": "amount",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "100",
+       "title": "Amount"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Put Withdrawal Fee",
+    "operationId": "put_withdrawal_fee_api_v1_console_settings_withdrawal_fee_put",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/FeeIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/console/settings/backups": {
+   "get": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "List Backups",
+    "operationId": "list_backups_api_v1_console_settings_backups_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Dashboard (five sections)"
+    ],
+    "summary": "Run Backup",
+    "operationId": "run_backup_api_v1_console_settings_backups_post",
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
   "schemas": {
+   "AcceptInvitationIn": {
+    "properties": {
+     "token": {
+      "type": "string",
+      "maxLength": 200,
+      "minLength": 20,
+      "title": "Token"
+     },
+     "password": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 10,
+      "title": "Password"
+     }
+    },
+    "type": "object",
+    "required": [
+     "token",
+     "password"
+    ],
+    "title": "AcceptInvitationIn"
+   },
    "AdjustIn": {
     "properties": {
      "wallet_account_number": {
@@ -7921,6 +9749,52 @@
     ],
     "title": "ApiKeyOut"
    },
+   "AppCreateIn": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "maxLength": 120,
+      "minLength": 2,
+      "title": "Name"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "permissions": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Permissions"
+     },
+     "require_verified_subscribers": {
+      "type": "boolean",
+      "title": "Require Verified Subscribers",
+      "default": false
+     }
+    },
+    "type": "object",
+    "required": [
+     "name"
+    ],
+    "title": "AppCreateIn"
+   },
    "AppIn": {
     "properties": {
      "business_id": {
@@ -8000,6 +9874,61 @@
      "created_at"
     ],
     "title": "AppOut"
+   },
+   "AppUpdateIn": {
+    "properties": {
+     "status": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^(active|disabled)$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Status"
+     },
+     "permissions": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Permissions"
+     },
+     "require_verified_subscribers": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Require Verified Subscribers"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     }
+    },
+    "type": "object",
+    "title": "AppUpdateIn"
    },
    "ApprovalOut": {
     "properties": {
@@ -8855,21 +10784,6 @@
     ],
     "title": "CheckoutPayWalletIn"
    },
-   "CodeIn": {
-    "properties": {
-     "code": {
-      "type": "string",
-      "maxLength": 8,
-      "minLength": 6,
-      "title": "Code"
-     }
-    },
-    "type": "object",
-    "required": [
-     "code"
-    ],
-    "title": "CodeIn"
-   },
    "DeliveryOut": {
     "properties": {
      "id": {
@@ -9030,6 +10944,20 @@
      "code"
     ],
     "title": "Disable2faIn"
+   },
+   "FeeIn": {
+    "properties": {
+     "percent": {
+      "type": "string",
+      "maxLength": 8,
+      "title": "Percent"
+     }
+    },
+    "type": "object",
+    "required": [
+     "percent"
+    ],
+    "title": "FeeIn"
    },
    "FeeRuleIn": {
     "properties": {
@@ -9435,6 +11363,57 @@
     },
     "type": "object",
     "title": "HTTPValidationError"
+   },
+   "InviteIn": {
+    "properties": {
+     "email": {
+      "type": "string",
+      "format": "email",
+      "title": "Email"
+     },
+     "full_name": {
+      "type": "string",
+      "maxLength": 200,
+      "minLength": 2,
+      "title": "Full Name"
+     },
+     "role": {
+      "type": "string",
+      "title": "Role",
+      "default": "customer"
+     },
+     "phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Phone"
+     }
+    },
+    "type": "object",
+    "required": [
+     "email",
+     "full_name"
+    ],
+    "title": "InviteIn"
+   },
+   "KeyIn": {
+    "properties": {
+     "environment": {
+      "type": "string",
+      "pattern": "^(sandbox|live)$",
+      "title": "Environment"
+     }
+    },
+    "type": "object",
+    "required": [
+     "environment"
+    ],
+    "title": "KeyIn"
    },
    "KycDocumentOut": {
     "properties": {
@@ -10961,6 +12940,82 @@
     ],
     "title": "PaymentRequestOut"
    },
+   "PayoutIn": {
+    "properties": {
+     "amount": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "title": "Amount",
+      "description": "Requested amount; the withdrawal fee is deducted from it"
+     },
+     "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "title": "Currency",
+      "default": "GHS"
+     },
+     "phone": {
+      "type": "string",
+      "title": "Phone",
+      "description": "Recipient mobile money number"
+     },
+     "account_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Account Name"
+     },
+     "reference": {
+      "type": "string",
+      "maxLength": 64,
+      "minLength": 3,
+      "title": "Reference",
+      "description": "Your unique reference for this payout"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 160
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "expected_fee_percent": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 12
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Fee Percent"
+     }
+    },
+    "type": "object",
+    "required": [
+     "amount",
+     "phone",
+     "reference"
+    ],
+    "title": "PayoutIn"
+   },
    "ProfileUpdateIn": {
     "properties": {
      "full_name": {
@@ -10990,6 +13045,18 @@
     },
     "type": "object",
     "title": "ProfileUpdateIn"
+   },
+   "ReasonIn": {
+    "properties": {
+     "reason": {
+      "type": "string",
+      "maxLength": 500,
+      "title": "Reason",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "title": "ReasonIn"
    },
    "ReconciliationOut": {
     "properties": {
@@ -11625,6 +13692,77 @@
     ],
     "title": "StatusIn"
    },
+   "SubscriberActionIn": {
+    "properties": {
+     "action": {
+      "type": "string",
+      "pattern": "^(activate|deactivate|verify|revoke_sessions)$",
+      "title": "Action"
+     },
+     "reason": {
+      "type": "string",
+      "maxLength": 500,
+      "title": "Reason",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "required": [
+     "action"
+    ],
+    "title": "SubscriberActionIn"
+   },
+   "SubscriberIn": {
+    "properties": {
+     "external_id": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "External Id",
+      "description": "Your application's own id for this user"
+     },
+     "display_name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 200
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Display Name"
+     },
+     "phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Phone"
+     },
+     "email": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "email"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Email"
+     }
+    },
+    "type": "object",
+    "required": [
+     "external_id"
+    ],
+    "title": "SubscriberIn"
+   },
    "TicketIn": {
     "properties": {
      "subject": {
@@ -11937,9 +14075,43 @@
       "type": "string",
       "title": "Fee"
      },
+     "fee_rate": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Fee Rate"
+     },
+     "net_amount": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Net Amount"
+     },
      "currency": {
       "type": "string",
       "title": "Currency"
+     },
+     "app_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "App Id"
      },
      "source_wallet_id": {
       "anyOf": [
@@ -12231,6 +14403,11 @@
        }
       ],
       "title": "Last Login At"
+     },
+     "is_primary_admin": {
+      "type": "boolean",
+      "title": "Is Primary Admin",
+      "default": false
      }
     },
     "type": "object",
@@ -12573,6 +14750,18 @@
        }
       ],
       "title": "Description"
+     },
+     "expected_fee_percent": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 12
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Fee Percent"
      }
     },
     "type": "object",
@@ -12582,6 +14771,36 @@
      "channel"
     ],
     "title": "WithdrawIn"
+   },
+   "app__api__v1__subscribers__CodeIn": {
+    "properties": {
+     "code": {
+      "type": "string",
+      "maxLength": 10,
+      "minLength": 4,
+      "title": "Code"
+     }
+    },
+    "type": "object",
+    "required": [
+     "code"
+    ],
+    "title": "CodeIn"
+   },
+   "app__schemas__common__CodeIn": {
+    "properties": {
+     "code": {
+      "type": "string",
+      "maxLength": 8,
+      "minLength": 6,
+      "title": "Code"
+     }
+    },
+    "type": "object",
+    "required": [
+     "code"
+    ],
+    "title": "CodeIn"
    }
   }
  }

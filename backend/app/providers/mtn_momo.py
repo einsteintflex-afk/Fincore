@@ -87,12 +87,18 @@ class MtnProfile:
     callback_url: str
 
 
+def _primary_key(profile: str) -> str:
+    """FINCORE_MTN_DISBURSEMENT_PRIMARY_KEY belongs to whichever MTN mode this deployment runs in — never both."""
+    return settings.mtn_disbursement_primary_key if settings.mtn_momo_mode == profile else ""
+
+
 def sandbox_profile() -> MtnProfile:
     s = settings
     return MtnProfile("sandbox", s.mtn_sandbox_base_url, "sandbox",
                       (s.mtn_sandbox_collection_subscription_key, s.mtn_sandbox_collection_api_user,
                        s.mtn_sandbox_collection_api_key),
-                      (s.mtn_sandbox_disbursement_subscription_key, s.mtn_sandbox_disbursement_api_user,
+                      (s.mtn_sandbox_disbursement_subscription_key or _primary_key("sandbox"),
+                       s.mtn_sandbox_disbursement_api_user,
                        s.mtn_sandbox_disbursement_api_key),
                       s.mtn_sandbox_callback_url)
 
@@ -102,7 +108,8 @@ def production_profile() -> MtnProfile:
     return MtnProfile("production", s.mtn_production_base_url, s.mtn_production_target_environment,
                       (s.mtn_production_collection_subscription_key, s.mtn_production_collection_api_user,
                        s.mtn_production_collection_api_key),
-                      (s.mtn_production_disbursement_subscription_key, s.mtn_production_disbursement_api_user,
+                      (s.mtn_production_disbursement_subscription_key or _primary_key("production"),
+                       s.mtn_production_disbursement_api_user,
                        s.mtn_production_disbursement_api_key),
                       s.mtn_production_callback_url)
 
@@ -139,12 +146,15 @@ class MtnMomoProvider(PaymentProvider):
             raise ProviderNotConfigured(f"MTN MoMo {self.profile.name} {product} credentials are not configured")
         return c
 
-    def is_configured(self) -> bool:
+    def is_configured(self, product: str = "collection") -> bool:
         try:
-            self._creds("collection")
+            self._creds(product)
             return True
         except ProviderNotConfigured:
             return False
+
+    def configured_products(self) -> dict[str, bool]:
+        return {"collection": self.is_configured("collection"), "disbursement": self.is_configured("disbursement")}
 
     def _token(self, product: str) -> str:
         cached = self._tokens.get(product)

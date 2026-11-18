@@ -129,9 +129,9 @@ def test_reconciliation_and_reports(make_user, admin, active_business):
     tb = admin.get("/admin/reports/trial-balance").json()
     assert tb["integrity"]["balanced"]
     rev = admin.get("/admin/reports/revenue").json()
-    assert Decimal(str(rev["total_fees"])) == Decimal("0.50")
+    assert Decimal(str(rev["total_fees"])) == Decimal("1.50")  # 15% of the GHS 10 withdrawal
     ov = admin.get("/admin/overview").json()
-    assert ov["users"] >= 2 and Decimal(ov["customer_funds"]) == Decimal("89.50")
+    assert ov["users"] >= 2 and Decimal(ov["customer_funds"]) == Decimal("90.00")  # 100 - 10 requested
     assert admin.get("/admin/analytics/failures").status_code == 200
     assert admin.get("/admin/analytics/merchants").status_code == 200
     assert admin.get("/admin/providers").json()["live_payments_enabled"] is False

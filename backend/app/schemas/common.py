@@ -42,6 +42,22 @@ class RegisterIn(BaseModel):
     phone: str | None = None
 
 
+class AcceptInvitationIn(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+    password: str = Field(min_length=10, max_length=128)
+
+
+class InviteIn(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=200)
+    role: str = "customer"
+    phone: str | None = None
+
+
+class ReasonIn(BaseModel):
+    reason: str = Field(default="", max_length=500)
+
+
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
@@ -78,6 +94,7 @@ class UserOut(ORM):
     totp_enabled: bool
     created_at: datetime
     last_login_at: datetime | None
+    is_primary_admin: bool = False
 
 
 class ProfileUpdateIn(BaseModel):
@@ -192,6 +209,19 @@ class WithdrawIn(BaseModel):
     account_number: str | None = None
     account_name: str | None = None
     description: str | None = None
+    # The fee percentage the user was shown and confirmed. If the setting changed since, the request is refused
+    # (409 fee_changed) instead of charging a fee the user did not see.
+    expected_fee_percent: str | None = Field(default=None, max_length=12)
+
+
+class PayoutIn(BaseModel):
+    amount: Money = Field(description="Requested amount; the withdrawal fee is deducted from it")
+    currency: str = Field(default="GHS", pattern="^[A-Z]{3}$")
+    phone: str = Field(description="Recipient mobile money number")
+    account_name: str | None = None
+    reference: str = Field(min_length=3, max_length=64, description="Your unique reference for this payout")
+    description: str | None = Field(default=None, max_length=160)
+    expected_fee_percent: str | None = Field(default=None, max_length=12)
 
 
 class TransferIn(BaseModel):
@@ -209,7 +239,10 @@ class TransactionOut(ORM):
     channel: str
     amount: Dec
     fee: Dec
+    fee_rate: Dec | None = None      # withdrawal fee rate applied (0.15 = 15%)
+    net_amount: Dec | None = None    # what the recipient received (withdrawals)
     currency: str
+    app_id: uuid.UUID | None = None
     source_wallet_id: uuid.UUID | None
     destination_wallet_id: uuid.UUID | None
     provider: str | None

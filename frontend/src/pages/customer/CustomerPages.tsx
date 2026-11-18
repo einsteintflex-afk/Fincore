@@ -25,7 +25,7 @@ import {
 } from "@/components/ui";
 import { api, downloadFile, newIdempotencyKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { amountError, dateOnly, dateTime, detectNetwork, maskPhone, money, NETWORKS, providerLabel, titleCase } from "@/lib/format";
+import { amountError, compareDecimal, dateOnly, dateTime, detectNetwork, maskPhone, money, NETWORKS, providerLabel, titleCase } from "@/lib/format";
 import { useAction, useGet, usePlatform, useWallets } from "@/lib/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/toast";
@@ -73,7 +73,8 @@ export function TransactionDetail({ t, onClose }: { t: Transaction | null; onClo
           ["Reference", <CopyText key="r" text={t.reference} />],
           ["Type", titleCase(t.type)],
           ["Description", t.description],
-          ["Fee", money(t.fee, t.currency)],
+          ["Fee", money(t.fee, t.currency) + (t.fee_rate ? ` (${(Number(t.fee_rate) * 100).toFixed(2).replace(/\.?0+$/, "")}%)` : "")],
+          ...(t.net_amount ? [["Recipient received", money(t.net_amount, t.currency)] as [string, string]] : []),
           ["Channel", titleCase(t.channel)],
           ["Counterparty", cp.name || cp.label || cp.account_number || maskPhone(cp.msisdn) || "—"],
           ["Date", dateTime(t.created_at)],
@@ -420,6 +421,7 @@ export function WithdrawPage() {
   const [result, setResult] = useState<Transaction | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [idem, setIdem] = useState(newIdempotencyKey());
+  const [quote, setQuote] = useState<WithdrawalQuote | null>(null);
 
   async function checkName() {
     try {
@@ -436,19 +438,46 @@ export function WithdrawPage() {
   const withdraw = useAction(
     () => api<Transaction>("/withdrawals", {
       body: { wallet_id: walletId, amount, channel, phone: channel === "mobile_money" ? phone : null, bank_code: channel === "bank" ? bankCode : null,
-        account_number: channel === "bank" ? accountNumber : null, account_name: accountName || null },
+        account_number: channel === "bank" ? accountNumber : null, account_name: accountName || null,
+        expected_fee_percent: quote?.fee_percent },
       idempotencyKey: idem,
     }),
-    { invalidate: [["wallets"], ["transactions"]], onSuccess: setResult },
+    {
+      invalidate: [["wallets"], ["transactions"]],
+      onSuccess: (t) => { setResult(t); setQuote(null); },
+      onError: (e: any) => { if (e?.code === "fee_changed") { setQuote(null); setErr(e.message); } },
+    },
   );
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     const ae = amountError(amount);
     if (ae) return setErr(ae);
+    if (wallet && compareDecimal(amount, wallet.balance) > 0) return setErr("Insufficient balance for this withdrawal");
     setErr(null);
-    withdraw.mutate(undefined);
+    try {
+      setQuote(await api<WithdrawalQuote>("/withdrawals/quote", { query: { amount, currency: wallet?.currency ?? "GHS" } }));
+    } catch (e2) {
+      setErr((e2 as Error).message);
+    }
   }
   if (result) return (<><PageHeader title="Withdraw" /><ResultCard t={result} onAgain={() => { setResult(null); setIdem(newIdempotencyKey()); }} /></>);
+  if (quote)
+    return (
+      <>
+        <PageHeader title="Confirm withdrawal" subtitle="Check the amounts. The withdrawal fee is deducted from the amount you withdraw." />
+        <Card className="max-w-xl">
+          <div className="space-y-4">
+            {withdraw.error && <Alert tone="error">{(withdraw.error as Error).message}</Alert>}
+            <FeeBreakdown q={quote} />
+            <p className="text-sm text-slate-600">To: {channel === "mobile_money" ? phone : `${bankCode} ${accountNumber}`}{accountName ? ` (${accountName})` : ""}</p>
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={() => setQuote(null)} disabled={withdraw.isPending}>Back</Button>
+              <Button className="flex-1" loading={withdraw.isPending} onClick={() => withdraw.mutate(undefined)}>Confirm withdrawal</Button>
+            </div>
+          </div>
+        </Card>
+      </>
+    );
   return (
     <>
       <PageHeader title="Withdraw" subtitle="Cash out to mobile money or a Ghanaian bank account." />
@@ -469,9 +498,9 @@ export function WithdrawPage() {
               <Input label="Account number" inputMode="numeric" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} onBlur={checkName} hint={lookup ?? undefined} required />
             </>
           )}
-          <Input label="Amount (GHS)" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} hint={wallet && `Available: ${money(wallet.balance)} · fees apply (see summary)`} />
-          <Alert tone="info">{channel === "mobile_money" ? "Fee: 0.75% (min GH₵0.50, max GH₵15)." : "Fee: GH₵2.00 per bank transfer."}</Alert>
-          <Button type="submit" size="lg" className="w-full" loading={withdraw.isPending}>Withdraw</Button>
+          <Input label="Amount to withdraw (GHS)" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} hint={wallet && `Available: ${money(wallet.balance)}`} />
+          <WithdrawalFeeNote />
+          <Button type="submit" size="lg" className="w-full">Review</Button>
         </form>
       </Card>
     </>
@@ -879,5 +908,42 @@ function TicketThread({ id, onClose }: { id: string | null; onClose: () => void 
         </>
       )}
     </Modal>
+  );
+}
+
+// ------------------------------------------------------------------ withdrawal fee
+export interface WithdrawalQuote {
+  currency: string;
+  requested_amount: string;
+  fee_percent: string;
+  fee_amount: string;
+  net_amount: string;
+  total_debit: string;
+}
+
+export function FeeBreakdown({ q }: { q: WithdrawalQuote }) {
+  const row = (label: string, value: string, strong?: boolean) => (
+    <div className={strong ? "flex justify-between border-t border-slate-200 pt-2 font-semibold" : "flex justify-between"}>
+      <dt className="text-slate-600">{label}</dt>
+      <dd data-testid={label}>{value}</dd>
+    </div>
+  );
+  return (
+    <dl className="space-y-2 rounded-lg bg-slate-50 p-4 text-sm" aria-label="Withdrawal fee breakdown">
+      {row("Requested withdrawal", money(q.requested_amount, q.currency))}
+      {row(`Withdrawal fee (${q.fee_percent}%)`, money(q.fee_amount, q.currency))}
+      {row("Recipient receives", money(q.net_amount, q.currency), true)}
+      {row("Total deducted from balance", money(q.total_debit, q.currency))}
+    </dl>
+  );
+}
+
+function WithdrawalFeeNote() {
+  const q = useGet<WithdrawalQuote>(["withdrawal-quote", "100"], "/withdrawals/quote", { amount: "100" });
+  if (!q.data) return null;
+  return (
+    <Alert tone="info">
+      Withdrawal fee: {q.data.fee_percent}% of the amount, deducted from it. Example: withdraw {money("100")}, the recipient gets {money(q.data.net_amount)} and the fee is {money(q.data.fee_amount)}.
+    </Alert>
   );
 }

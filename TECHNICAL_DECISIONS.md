@@ -80,7 +80,7 @@ sponsor bank (or direct GhIPSS membership), because those operators only open th
 licensed partners.
 
 **TD-020 Private deployment for the owner's own sites (owner decision, 2026-11-11).** FinCore runs as the
-owner's private payment system for his own websites/apps (nursing studies, healthcare registration, admission
+owner's private payment system for their own websites/apps (nursing studies, healthcare registration, admission
 fees, a mini market) rather than as a public wallet. Private mode (`python -m app.cli private-mode on`) closes
 public sign-up; staff accounts are created by an admin and set their own password from an emailed link. Payers
 never need a FinCore account: they pay through payment links (with custom questions) or the gateway API, by
@@ -98,3 +98,27 @@ status API confirms success. Sandbox and production credentials are separate var
 and testing mode and is refused for real payments in a production deployment. A migration deleted the stored
 personal number and cancelled any payment still awaiting manual confirmation. Sandbox access is not production
 approval.
+
+**TD-023 Fifteen dashboard seats, enforced in the database (owner requirement, 2026-11-18).** Every human account
+that can sign in holds a seat unless deactivated or removed; invited accounts hold their seat from the moment of
+invitation. A `BEFORE INSERT/UPDATE OF status` trigger on `users` counts seat holders under
+`pg_advisory_xact_lock` so concurrent invitations/activations cannot exceed 15. The primary administrator is a
+flagged row (unique partial index) protected by a second trigger. Customers of connected applications are
+`app_subscribers`, never `users`, so they never consume seats.
+
+**TD-024 Withdrawal fee deducted from the amount (owner requirement).** `fee = round_half_up(amount × rate)`,
+`net = amount − fee`, debit = amount. Hold the full amount; on success DR PENDING_PAYOUTS amount / CR clearing net /
+CR WITHDRAWAL_FEE_REVENUE fee; on failure reverse the hold (no fee). Rate stored per transaction. Withdrawal fee
+rules are retired; other fee rules (merchant MDR, settlement) are unchanged.
+
+**TD-025 Application isolation.** Gateway reads and refunds filter by the calling application, not the business;
+webhooks for app-created records target only that app's endpoints; permissions are an explicit list per app with
+payouts off by default.
+
+**TD-026 Multi-platform shells.** Capacitor (Android/iOS) and Tauri (desktop) wrap the same React build. Packaged
+apps send `X-FinCore-Client: native`, receive the refresh token in the body and keep it in memory only; the server
+address is user-configurable (https only). No credentials or balances are stored on devices.
+
+**TD-027 No Bank of Ghana involvement (owner decision, 2026-11-18).** Recorded as the owner's instruction; the
+licensing blocker is closed on that basis. Engineering note: the platform keeps the live-payments kill switch and
+separate sandbox/production credentials regardless.

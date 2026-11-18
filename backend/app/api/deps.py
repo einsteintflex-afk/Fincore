@@ -46,8 +46,8 @@ def get_principal(request: Request, db: Session = Depends(get_db)) -> Principal:
     if not session or session.revoked_at:
         raise Unauthorized("Session has been signed out", code="session_revoked")
     user = db.get(User, uuid.UUID(payload["sub"]))
-    if not user or user.status == UserStatus.CLOSED:
-        raise Unauthorized("Account unavailable")
+    if not user or user.status in (UserStatus.CLOSED, UserStatus.DEACTIVATED, UserStatus.INVITED):
+        raise Unauthorized("Account unavailable", code="account_inactive")
     if RestrictionType.LOGIN_BLOCK in active_restrictions(db, user.id):
         raise Unauthorized("Sign-in is blocked for this account", code="login_blocked")
     return Principal(user=user, session_id=session.id)
@@ -112,6 +112,12 @@ def api_context(request: Request, db: Session = Depends(get_db)) -> ApiContext:
     ctx = ApiContext(key=key, app=app, business=biz)
     request.state.api_ctx = {"app_id": app.id, "key_id": key.id, "environment": key.environment}
     return ctx
+
+
+def require_app_permission(ctx: ApiContext, permission: str) -> None:
+    if permission not in (ctx.app.permissions or []):
+        raise Forbidden(f"This application is not permitted to use '{permission}'. "
+                        "An administrator can grant it in Applications.", code="app_permission_denied")
 
 
 # ---------------------------------------------------------------- idempotency

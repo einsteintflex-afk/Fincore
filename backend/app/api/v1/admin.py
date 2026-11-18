@@ -10,7 +10,6 @@ Role guide:
 
 from __future__ import annotations
 
-import secrets
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -72,7 +71,6 @@ from app.schemas.common import (
     UserOut,
 )
 from app.services import aml, analytics, approvals, kyc, reconciliation
-from app.services import auth as auth_svc
 from app.services import business as bsvc
 from app.services.audit import audit
 from app.services.auth import revoke_all_sessions
@@ -138,19 +136,12 @@ def users(page: int = Query(1, ge=1), page_size: int = Query(20, le=100), search
 
 
 @router.post("/users", response_model=UserOut, status_code=201)
-def create_user(body: StaffUserIn, staff: User = Depends(admin_only), db: Session = Depends(get_db)):
-    """Create an account (e.g. staff while public sign-up is closed). The person sets their own password from
-    an emailed link; nobody else ever knows it."""
-    if body.role not in {r.value for r in UserRole}:
-        raise ValidationFailed("Unknown role")
-    if body.role == UserRole.SUPER_ADMIN and staff.role != UserRole.SUPER_ADMIN:
-        raise Forbidden("Only a super admin can create super admins")
-    user = auth_svc.register(db, email=body.email, password="Tmp!" + secrets.token_urlsafe(24) + "aA1",
-                             full_name=body.full_name, phone=body.phone, role=UserRole(body.role))
-    auth_svc.request_password_reset(db, user.email)
-    audit(db, "user.created_by_staff", actor_id=staff.id, actor_type="staff", target_type="user", target_id=user.id,
-          details={"role": body.role})
-    db.commit()
+def create_user(body: StaffUserIn, staff: User = Depends(super_admin), db: Session = Depends(get_db)):
+    """Invite an account (same as ``POST /admin/team/invitations``). The person sets their own password from
+    the invitation link; nobody else ever knows it. Bound by the 15-seat limit."""
+    from app.services import team
+
+    user, _ = team.invite(db, staff, email=body.email, full_name=body.full_name, role=body.role, phone=body.phone)
     return user
 
 
@@ -228,8 +219,13 @@ def set_status(user_id: uuid.UUID, body: StatusIn, staff: User = Depends(complia
     u = db.get(User, user_id)
     if not u:
         raise NotFound("User not found")
-    if body.status not in {s.value for s in UserStatus}:
-        raise ValidationFailed("Unknown status")
+    if body.status not in {UserStatus.ACTIVE, UserStatus.RESTRICTED, UserStatus.FROZEN}:
+        raise ValidationFailed("Use Settings → Users to invite, deactivate, activate or remove accounts",
+                               code="use_team_endpoints")
+    if u.is_primary_admin:
+        raise Forbidden("The primary administrator cannot be changed by anyone", code="primary_admin_protected")
+    if u.status not in {UserStatus.ACTIVE, UserStatus.RESTRICTED, UserStatus.FROZEN}:
+        raise ValidationFailed("This account is not active; use Settings → Users", code="use_team_endpoints")
     u.status = body.status
     if body.status in (UserStatus.FROZEN, UserStatus.CLOSED):
         revoke_all_sessions(db, u.id)
@@ -241,18 +237,9 @@ def set_status(user_id: uuid.UUID, body: StatusIn, staff: User = Depends(complia
 
 @router.post("/users/{user_id}/role", response_model=UserOut)
 def set_role(user_id: uuid.UUID, body: RoleIn, staff: User = Depends(super_admin), db: Session = Depends(get_db)):
-    u = db.get(User, user_id)
-    if not u:
-        raise NotFound("User not found")
-    if body.role not in {r.value for r in UserRole}:
-        raise ValidationFailed("Unknown role")
-    old = u.role
-    u.role = body.role
-    revoke_all_sessions(db, u.id)
-    audit(db, "user.role_changed", actor_id=staff.id, actor_type="staff", target_type="user", target_id=u.id,
-          details={"from": old, "to": body.role})
-    db.commit()
-    return u
+    from app.services import team
+
+    return team.change_role(db, staff, user_id, body.role)
 
 
 # ================================================================ KYC

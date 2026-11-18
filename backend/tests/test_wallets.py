@@ -97,8 +97,11 @@ def test_withdrawal_to_momo_with_fee(make_user):
     assert r.status_code == 201, r.text
     t = r.json()
     assert t["status"] == "successful"
-    assert Decimal(t["fee"]) == Decimal("0.75")  # 0.75% with GHS 0.50 minimum
-    assert Decimal(u.balance()) == Decimal("399.25")
+    # 15% withdrawal fee deducted from the requested amount: GHS 15 fee, GHS 85 to the recipient,
+    # GHS 100 debited in total.
+    assert Decimal(t["fee"]) == Decimal("15") and Decimal(t["net_amount"]) == Decimal("85")
+    assert Decimal(t["fee_rate"]) == Decimal("0.15")
+    assert Decimal(u.balance()) == Decimal("400.00")
     integrity_ok()
 
 
@@ -119,7 +122,7 @@ def test_pending_withdrawal_holds_then_fails(make_user):
                                 "bank_code": "GCB", "account_number": "1234561111"})
     t = r.json()
     assert t["status"] == "processing"
-    assert Decimal(u.balance()) == Decimal("98.00")  # 100 + GHS 2 bank fee held
+    assert Decimal(u.balance()) == Decimal("100.00")  # the requested 100 is held (fee comes out of it)
     u.post(f"/transactions/{t['reference']}/simulate", params={"outcome": "failed"})
     assert Decimal(u.balance()) == Decimal("200.00")
     integrity_ok()
@@ -260,7 +263,7 @@ def test_notifications(make_user):
     u = make_user()
     fund(u, "20")
     n = u.get("/me/notifications").json()
-    assert n["unread"] >= 2
+    assert n["unread"] >= 1
     u.post("/me/notifications/read-all")
     assert u.get("/me/notifications").json()["unread"] == 0
 

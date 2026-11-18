@@ -1,9 +1,8 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Alert, Button, Input } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, isNativeApp, server } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
-import { usePlatform } from "@/lib/hooks";
 
 function AuthCard({ title, subtitle, children, footer }: { title: string; subtitle?: string; children: ReactNode; footer?: ReactNode }) {
   return (
@@ -40,7 +39,6 @@ function AuthCard({ title, subtitle, children, footer }: { title: string; subtit
 export function LoginPage() {
   const { user, login, completeTwoFactor } = useAuth();
   const loc = useLocation() as { state?: { from?: string } };
-  const platform = usePlatform();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [challenge, setChallenge] = useState<string | null>(null);
@@ -48,7 +46,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to={loc.state?.from ?? (isStaff(user) ? "/admin" : "/app")} replace />;
+  if (user) return <Navigate to={loc.state?.from ?? (isStaff(user) ? "/console" : "/app")} replace />;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -72,9 +70,10 @@ export function LoginPage() {
     <AuthCard
       title={challenge ? "Two-factor authentication" : "Welcome back"}
       subtitle={challenge ? "Enter the 6-digit code from your authenticator app." : "Sign in to your FinCore account."}
-      footer={!challenge && platform.data?.signup_enabled !== false && <>New to FinCore? <Link className="font-medium text-brand-700" to="/register">Create an account</Link></>}
+      footer={!challenge && <span className="text-slate-500">Private system · access by invitation only</span>}
     >
       <form onSubmit={submit} className="space-y-4">
+        {!challenge && <ServerField />}
         {error && <Alert tone="error">{error}</Alert>}
         {challenge ? (
           <Input label="Authentication code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} autoFocus maxLength={8} />
@@ -101,32 +100,39 @@ export function LoginPage() {
 }
 
 export function RegisterPage() {
-  const platform = usePlatform();
-  if (platform.data?.signup_enabled === false)
-    return (
-      <AuthCard title="Sign-up is closed" footer={<Link to="/login" className="text-brand-700">Sign in</Link>}>
-        <Alert tone="info">This is a private FinCore. Ask the owner to create an account for you.</Alert>
-      </AuthCard>
-    );
-  return <RegisterForm />;
+  return (
+    <AuthCard title="Invitation only" footer={<Link to="/login" className="text-brand-700">Sign in</Link>}>
+      <Alert tone="info">
+        FinCore is private. There is no public sign-up — your administrator sends you an invitation link to set your password.
+      </Alert>
+    </AuthCard>
+  );
 }
 
-function RegisterForm() {
-  const { login } = useAuth();
+export function AcceptInvitePage() {
+  const [params] = useSearchParams();
+  const token = params.get("token") ?? "";
   const nav = useNavigate();
-  const [form, setForm] = useState({ full_name: "", email: "", phone: "", password: "" });
+  const { login } = useAuth();
+  const [info, setInfo] = useState<{ email: string; full_name: string; role: string } | null>(null);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
+
+  useEffect(() => {
+    api("/auth/invitation", { query: { token } }).then(setInfo).catch((e) => setError((e as Error).message));
+  }, [token]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (password !== confirm) return setError("The passwords do not match");
     setError(null);
     setBusy(true);
     try {
-      await api("/auth/register", { body: { ...form, phone: form.phone || null } });
-      await login(form.email, form.password);
-      nav("/app");
+      await api("/auth/invitation/accept", { body: { token, password } });
+      await login(info!.email, password);
+      nav("/");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -135,25 +141,36 @@ function RegisterForm() {
   }
 
   return (
-    <AuthCard title="Create your account" subtitle="Get a GHS wallet in under a minute." footer={<>Already have an account? <Link className="font-medium text-brand-700" to="/login">Sign in</Link></>}>
-      <form onSubmit={submit} className="space-y-4">
-        {error && <Alert tone="error">{error}</Alert>}
-        <Input label="Full name" value={form.full_name} onChange={set("full_name")} required autoComplete="name" />
-        <Input label="Email" type="email" value={form.email} onChange={set("email")} required autoComplete="email" />
-        <Input label="Mobile number" placeholder="024 123 4567" value={form.phone} onChange={set("phone")} autoComplete="tel" hint="MTN, Telecel or AT number" />
-        <Input
-          label="Password"
-          type="password"
-          value={form.password}
-          onChange={set("password")}
-          required
-          autoComplete="new-password"
-          hint="At least 10 characters with upper & lower case letters and a digit"
-        />
-        <Button type="submit" className="w-full" size="lg" loading={busy}>Create account</Button>
-        <p className="text-center text-xs text-slate-500">By continuing you agree to FinCore's terms and privacy policy.</p>
-      </form>
+    <AuthCard title="Accept your invitation" subtitle={info ? `Welcome, ${info.full_name}. Set a password for ${info.email}.` : undefined}>
+      {error && <Alert tone="error">{error}</Alert>}
+      {info && (
+        <form onSubmit={submit} className="mt-4 space-y-4">
+          <Input label="Password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required
+            hint="At least 10 characters with upper & lower case letters and a digit" />
+          <Input label="Confirm password" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+          <Button type="submit" className="w-full" size="lg" loading={busy}>Set password and sign in</Button>
+        </form>
+      )}
     </AuthCard>
+  );
+}
+
+function ServerField() {
+  const [value, setValue] = useState(server.get());
+  const [editing, setEditing] = useState(!server.get());
+  const [err, setErr] = useState<string | null>(null);
+  if (!isNativeApp()) return null;
+  if (!editing)
+    return (
+      <p className="text-xs text-slate-500">
+        Server: {server.get()} · <button type="button" className="text-brand-700" onClick={() => setEditing(true)}>change</button>
+      </p>
+    );
+  return (
+    <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+      <Input label="FinCore server address" placeholder="https://fincore.example.com" value={value} onChange={(e) => setValue(e.target.value)} error={err ?? undefined} />
+      <Button type="button" variant="secondary" size="sm" onClick={() => { try { server.set(value); setErr(null); setEditing(false); } catch (e) { setErr((e as Error).message); } }}>Save server</Button>
+    </div>
   );
 }
 

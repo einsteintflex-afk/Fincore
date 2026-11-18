@@ -31,6 +31,14 @@ Legend: ✅ done · 🔜 next · ⏳ blocked on owner/external · 📐 designed
 9. 🔜 Frontend e2e suite in CI (Playwright) and visual regression snapshots
 10. 🔜 Customer notification preferences; in-app receipt sharing
 
+## Phase 3b — Private platform (session 6) ✅
+1. ✅ 15-seat dashboard (DB-enforced), invitations, protected primary admin
+2. ✅ Verified subscribers for connected applications
+3. ✅ Configurable withdrawal fee (default 15%, deducted)
+4. ✅ MTN Disbursements; per-application isolation, permissions, payouts API
+5. ✅ Five-section dashboard; backups with verified restore
+6. ✅ Android APK/AAB, Windows installer · 🔜 iOS/macOS builds (need a Mac) · 🔜 real MTN sandbox run
+
 ## Phase 4 — Go-live enablement ⏳ (needs business owner)
 - ⏳ Direct provider agreements (MTN MoMo, Telecel Cash, AT Money, GhIPSS sponsor bank) → implement/enable adapters, test in each provider sandbox (no third-party gateway, TD-019)
 - ⏳ Email + SMS providers → wire outbox

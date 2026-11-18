@@ -1,8 +1,9 @@
 # FinCore
 
-A Ghanaian fintech platform: GHS wallets, mobile money and bank rails, merchant payments
-(checkout, payment links, refunds, settlements), a developer API with sandbox keys and signed
-webhooks, and a back-office admin console — all on a double-entry, append-only ledger.
+A private financial engine for the owner's own applications (Send Me, Nurses & Midwives Hub, PharmaStock…):
+MTN MoMo collections and disbursements, a configurable withdrawal fee, per-application API keys, webhooks and
+verified subscribers, and a five-section dashboard for at most 15 people — all on a double-entry, append-only
+ledger. Runs on the web, Android, iPhone, Windows and macOS from one codebase.
 
 > **Status:** development build. All payment-provider traffic goes to a **sandbox simulator** until
 > provider contracts, credentials and Bank of Ghana authorisation are in place. No real money moves.
@@ -27,7 +28,10 @@ docker compose up --build                       # db, migrations, api, worker, w
 docker compose run --rm api python -m app.cli demo-data
 ```
 Open http://localhost:8080 and sign in with a demo account (password `Demo!Pass2026`):
-`ama@fincore.demo` (customer), `kofi@fincore.demo` (merchant), `admin@fincore.demo` (super admin).
+`admin@fincore.demo` (primary administrator), `ama@fincore.demo`, `kofi@fincore.demo`. There is no public sign-up:
+add people from Settings → Users (max 15 accounts).
+
+Apps for Android / iPhone / Windows / macOS: see [docs/MOBILE_DESKTOP.md](docs/MOBILE_DESKTOP.md).
 API reference: http://localhost:8000/docs
 
 ## Quick start (without Docker)
@@ -44,7 +48,7 @@ python3 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt
 cd backend
 cp .env.example .env                       # adjust as needed
 ../.venv/bin/alembic upgrade head
-../.venv/bin/python -m app.cli demo-data   # or: app.cli seed && app.cli create-admin you@x.com "Your Name"
+../.venv/bin/python -m app.cli demo-data   # or: app.cli seed && app.cli create-admin you@x.com "Your Name" (becomes primary admin)
 ../.venv/bin/uvicorn app.main:app --reload --port 8000
 ../.venv/bin/python -m app.cli worker      # separate terminal: webhooks, status polling, outbox
 
@@ -55,11 +59,11 @@ cd ../frontend && npm install && npm run dev   # http://localhost:5173 (proxies 
 ## Tests
 
 ```bash
-cd backend && ../.venv/bin/python -m pytest        # 173 tests, needs the fincore_test database
-cd frontend && npm test                            # 16 unit tests
-node frontend/e2e/journey.cjs <shots-dir> <recipient-acct> <link-slug>   # browser journey (Playwright)
+cd backend && ../.venv/bin/python -m pytest        # 206 tests, needs the fincore_test database
+cd frontend && npm test                            # 21 unit tests
+node frontend/e2e/console.cjs <shots-dir>                                 # dashboard browser check
 node frontend/e2e/smoke.cjs <shots-dir>                                   # every page, all portals
-python backend/scripts/loadtest.py --users 20 --transfers 400            # load test
+python backend/scripts/loadtest.py --transfers 400                        # load test (existing accounts)
 ```
 
 ## Repository layout
@@ -86,7 +90,8 @@ docs/            architecture, security, API, deployment, operations, providers,
 - [docs/PAYMENT_PROVIDERS.md](docs/PAYMENT_PROVIDERS.md) – provider integrations and what's needed to go live
 - [docs/DATABASE.md](docs/DATABASE.md) – schema overview
 - [docs/INVESTMENT_MODULE.md](docs/INVESTMENT_MODULE.md) – future investment platform design
+- [docs/MOBILE_DESKTOP.md](docs/MOBILE_DESKTOP.md) – Android, iOS, Windows, macOS builds
 - [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) – outstanding production requirements
-- Project tracking: [PROJECT_STATUS.md](PROJECT_STATUS.md), [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md),
+- Project tracking: [FINCORE_MASTER_PROGRESS.md](FINCORE_MASTER_PROGRESS.md), [PROJECT_STATUS.md](PROJECT_STATUS.md), [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md),
   [CURRENT_TASK.md](CURRENT_TASK.md), [CHANGELOG.md](CHANGELOG.md), [BLOCKERS.md](BLOCKERS.md),
   [NEXT_SESSION_INSTRUCTIONS.md](NEXT_SESSION_INSTRUCTIONS.md)

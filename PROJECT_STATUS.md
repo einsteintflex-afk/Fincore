@@ -1,10 +1,14 @@
 # Project status
 
-_Last updated: 2026-11-18 (session 5)_
+_Last updated: 2026-11-18 (session 6) — full detail in [FINCORE_MASTER_PROGRESS.md](FINCORE_MASTER_PROGRESS.md)_
 
 **Direction (TD-020):** private payment system for the owner's own sites (Nurses Hub etc.), MoMo + card, direct integrations (TD-019).
 
-**MoMo collection:** official MTN MoMo Collections API (TD-022). Sandbox keys provisioned; MTN sandbox login currently failing (BLOCKERS B-1). Real money needs MTN production approval.
+**Private platform (session 6):** max 15 dashboard accounts (DB-enforced, invitation-only), verified subscribers for
+connected apps, configurable 15% withdrawal fee (deducted), MTN Collections + Disbursements, per-app isolation,
+five-section dashboard, backups with verified restore, Android/Windows builds (iOS/macOS configured).
+
+**MTN:** integration complete against a stand-in API; real sandbox login still failing (BLOCKERS B-1).
 
 **Overall:** Phase 1 (foundation) and Phase 2 (core product) are built and verified in sandbox mode.
 No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production provider credentials exist.
@@ -12,11 +16,15 @@ No real money can move: `FINCORE_LIVE_PAYMENTS_ENABLED=false` and no production 
 ## Verified state (re-run these to confirm)
 | Check | Command | Last result |
 |---|---|---|
-| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 173 passed |
+| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 206 passed |
 | Backend lint | `../.venv/bin/ruff check app tests` | clean |
 | Migrations match models | `../.venv/bin/alembic upgrade head && ../.venv/bin/alembic check` | no drift |
 | Frontend typecheck/build | `cd frontend && npm run build` | ok (initial JS ≈ 85 KB gz) |
-| Frontend tests | `npm test` | 16 passed |
+| Frontend tests | `npm test` | 21 passed |
+| Browser dashboard (five sections, apps, settings, fee review) | `node frontend/e2e/console.cjs <dir>` | 18/18, 0 errors |
+| Android release | `./gradlew assembleRelease bundleRelease` | signed APK + AAB |
+| Windows installer | `npx tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis` | built (unsigned) |
+| Backup → verified restore | `python -m app.cli backup && python -m app.cli verify-backup` | restored_ok |
 | Browser smoke (32 pages, 4 portals) | `node frontend/e2e/smoke.cjs <dir>` | 0 console/page errors |
 | Browser maker-checker flow | admin raises GHS 2,500 adjustment → second finance user approves | executed, ledger balanced |
 | Browser journey (register → deposit → send → limit → link checkout) | `node frontend/e2e/journey.cjs …` | all steps pass |

@@ -31,11 +31,16 @@ class Transaction(UUIDPk, Timestamps, Base):
     channel: Mapped[str] = mapped_column(String(32), default="wallet")
     amount: Mapped[Decimal] = mapped_column(MONEY)
     fee: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0"))
+    # Withdrawal fee snapshot: the rate applied (0.15 = 15%) and what the recipient receives (amount - fee).
+    # NULL for transactions whose fee, if any, is charged on top of the amount.
+    fee_rate: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+    net_amount: Mapped[Decimal | None] = mapped_column(MONEY)
     currency: Mapped[str] = mapped_column(String(3))
     source_wallet_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("wallets.id"), index=True)
     destination_wallet_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("wallets.id"), index=True)
     initiated_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True)
     business_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("businesses.id"), index=True)
+    app_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("developer_apps.id"), index=True)
     provider: Mapped[str | None] = mapped_column(String(32))
     provider_mode: Mapped[str] = mapped_column(String(16), default="sandbox")
     provider_reference: Mapped[str | None] = mapped_column(String(128), index=True)

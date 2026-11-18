@@ -10,9 +10,9 @@ from app.api.deps import Principal, client_ip, current_user, get_principal
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import Forbidden, Unauthorized
-from app.models.ops import SystemSetting
 from app.models.user import User, UserSession
 from app.schemas.common import (
+    AcceptInvitationIn,
     CodeIn,
     Disable2faIn,
     LoginIn,
@@ -32,12 +32,27 @@ from app.services import auth as svc
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-@router.post("/register", response_model=UserOut, status_code=201)
-def register(body: RegisterIn, db: Session = Depends(get_db)):
-    s = db.get(SystemSetting, "signup_enabled")
-    if s and not s.value.get("enabled", True):
-        raise Forbidden("New registrations are temporarily paused", code="signup_disabled")
-    return svc.register(db, email=body.email, password=body.password, full_name=body.full_name, phone=body.phone)
+@router.post("/register", status_code=403, responses={403: {"description": "Public registration is disabled"}})
+def register(body: RegisterIn):
+    """FinCore is private: there is no public registration. Accounts are created by invitation only
+    (Settings → Users). Customers of connected applications are subscribers, managed through the API."""
+    raise Forbidden("FinCore is private. Ask your administrator for an invitation.",
+                    code="public_registration_disabled")
+
+
+@router.get("/invitation")
+def invitation(token: str, db: Session = Depends(get_db)):
+    """Show who an invitation link is for (before the person sets a password)."""
+    from app.services import team
+
+    return team.invitation_info(db, token)
+
+
+@router.post("/invitation/accept", response_model=UserOut)
+def accept_invitation(body: AcceptInvitationIn, db: Session = Depends(get_db)):
+    from app.services import team
+
+    return team.accept_invitation(db, body.token, body.password)
 
 
 # ---------------------------------------------------------------- refresh-token transport

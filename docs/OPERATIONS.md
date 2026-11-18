@@ -28,16 +28,22 @@ implementation logs them (no provider configured). To deliver: implement SMTP (e
 an SMS gateway (e.g. Hubtel, mNotify, Arkesel) inside `app/workers/runner.py::drain_outbox`.
 
 ## Backups & disaster recovery
-* **RPO** target 5 min (WAL archiving / managed PITR), **RTO** target 1 h.
-* Daily logical dump (`pg_dump -Fc`) to separate, encrypted, versioned storage (different account/region).
-* Restore drill monthly: restore into a scratch instance, run `alembic current`, `python -m app.cli reconcile`,
-  compare row counts and total wallet balances with production.
-* DR runbook:
-  1. Declare incident; set `maintenance_mode` (Admin → Fees & limits → System settings) to stop money movement.
-  2. Promote standby / restore PITR to the last consistent point.
-  3. Point `FINCORE_DATABASE_URL` at the new primary; redeploy api/worker.
-  4. Run reconciliation; re-query all `processing` transactions with providers (Admin → Transactions → Re-query).
-  5. Disable maintenance mode; post-incident review.
+
+Built in (`app/services/backups.py`):
+
+| Task | Command |
+|---|---|
+| Automatic backups | set `FINCORE_BACKUP_DIR` (and optionally `FINCORE_BACKUP_INTERVAL_HOURS`=24, `FINCORE_BACKUP_KEEP`=14); the worker writes `fincore-YYYYmmdd-HHMMSS.dump` (pg_dump custom format, mode 600) |
+| Back up now | `python -m app.cli backup` or Settings → Backups → Back up now (super admin) |
+| Prove a backup restores | `python -m app.cli verify-backup [name]` — restores into a scratch database, checks debits = credits, every journal balanced and the guard triggers present, then drops the scratch database |
+| Restore | `python -m app.cli restore <name> <new_database>` — only into a NEW database (existing databases are never overwritten); then point `FINCORE_DATABASE_URL` at it and restart |
+
+Copy the backup directory off the server every day (object storage with versioning, e.g. `rclone sync`),
+encrypted at rest. Verified on 2026-11-18: a backup of the development database restored with 6,083 ledger entries,
+debits = credits = 39,069.00, 0 unbalanced journals, all 3 guards present.
+
+Recovery objectives with daily dumps: RPO ≤ 24 h. For a smaller RPO use PostgreSQL WAL archiving / point-in-time
+recovery from the hosting provider in addition to the dumps.
 
 ## Runbooks
 **Stuck payout** – Admin → Transactions → filter `processing` → open → *Re-query provider*. If the provider

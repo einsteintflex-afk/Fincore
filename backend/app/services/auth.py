@@ -115,6 +115,10 @@ def _issue_session(db: Session, user: User, user_agent: str | None, ip: str | No
 def _assert_can_login(db: Session, user: User) -> None:
     if user.status == UserStatus.CLOSED:
         raise AccountRestricted("This account has been closed")
+    if user.status == UserStatus.DEACTIVATED:
+        raise AccountRestricted("This account has been deactivated. Contact your FinCore administrator.")
+    if user.status == UserStatus.INVITED:
+        raise AccountRestricted("Accept your invitation first (use the link your administrator sent you).")
     if RestrictionType.LOGIN_BLOCK in active_restrictions(db, user.id):
         raise AccountRestricted("Sign-in is blocked for this account. Please contact support.")
 

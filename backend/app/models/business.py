@@ -32,6 +32,8 @@ class Business(UUIDPk, Timestamps, Base):
     merchant_code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
     settlement_schedule: Mapped[str] = mapped_column(String(16), default="manual")  # daily|weekly|manual
     settlement_destination: Mapped[dict] = mapped_column(JSON, default=dict)
+    # The owner's own business that holds applications created from the dashboard.
+    is_house: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class BusinessMember(UUIDPk, Timestamps, Base):

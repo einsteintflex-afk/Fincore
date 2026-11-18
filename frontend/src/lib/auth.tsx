@@ -46,8 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   const finish = useCallback(
-    async (data: { access_token: string }) => {
-      tokens.set(data.access_token);
+    async (data: { access_token: string; refresh_token?: string }) => {
+      tokens.set(data.access_token, data.refresh_token ?? null);
       await reload();
     },
     [reload],

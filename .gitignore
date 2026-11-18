@@ -14,3 +14,7 @@ backups/
 var/
 backend/var/
 backend/.env.mtn-sandbox
+release/
+frontend/android/local.properties
+*.jks
+keystore.properties

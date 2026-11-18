@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import httpx
 from sqlalchemy import select
@@ -33,7 +34,7 @@ from app.models.transaction import ProviderTransaction, Transaction
 from app.models.user import User
 from app.providers import get_provider, route
 from app.providers.base import CollectionRequest, DisbursementRequest, ProviderResult
-from app.services import fees, limits, risk
+from app.services import fees, limits, risk, withdrawal_fee
 from app.services.audit import audit
 from app.services.ghana import BANKS, NETWORK_NAMES, detect_network, local_format, normalize_msisdn, validate_bank
 from app.services.ledger import CR, DR, LedgerService, Line, SystemAccount
@@ -63,6 +64,17 @@ def _record_provider_txn(db: Session, provider_code: str, mode: str, direction: 
     db.add(ProviderTransaction(provider=provider_code, mode=mode, direction=direction,
                                provider_reference=result.provider_reference, internal_reference=txn.reference,
                                amount=txn.amount, currency=txn.currency, status=result.status, raw=result.raw))
+
+
+def outflow_total(txn: Transaction) -> Decimal:
+    """What leaves the wallet. Fee deducted from the amount (withdrawal fee): the amount itself.
+    Fee charged on top (other outflows): amount + fee."""
+    return txn.amount if txn.net_amount is not None else txn.amount + txn.fee
+
+
+def payout_amount(txn: Transaction) -> Decimal:
+    """What the recipient receives (and what the provider is asked to send)."""
+    return txn.net_amount if txn.net_amount is not None else txn.amount
 
 
 class TransactionService:
@@ -138,34 +150,60 @@ class TransactionService:
     # ================================================================ withdrawals
     def withdraw(self, user: User, wallet_id: uuid.UUID, amount: object, *, channel: str,
                  phone: str | None = None, bank_code: str | None = None, account_number: str | None = None,
-                 account_name: str | None = None, description: str = "") -> Transaction:
+                 account_name: str | None = None, description: str = "",
+                 expected_fee_percent: object | None = None) -> Transaction:
         db = self.db
         wallet = get_owned_wallet(db, user, wallet_id)
+        return self.withdraw_from_wallet(user, wallet, amount, channel=channel, phone=phone, bank_code=bank_code,
+                                         account_number=account_number, account_name=account_name,
+                                         description=description, expected_fee_percent=expected_fee_percent)
+
+    def withdraw_from_wallet(self, user: User | None, wallet: Wallet, amount: object, *, channel: str,
+                             phone: str | None = None, bank_code: str | None = None,
+                             account_number: str | None = None, account_name: str | None = None,
+                             description: str = "", expected_fee_percent: object | None = None,
+                             app_id: uuid.UUID | None = None, business_id: uuid.UUID | None = None,
+                             reference: str | None = None, meta: dict | None = None) -> Transaction:
+        """Withdraw ``amount`` (the requested amount) from a wallet. The withdrawal fee is deducted from it:
+        the wallet is debited ``amount``, the recipient is paid ``amount - fee``, the fee becomes revenue."""
+        db = self.db
         assert_wallet_active(wallet)
         amount = validate_amount(amount, wallet.currency)
-        ensure_user_can_debit(db, user)
+        if user is not None:
+            ensure_user_can_debit(db, user)
+        withdrawal_fee.check_expected(db, expected_fee_percent)
         counterparty, network = self._payout_destination(channel, phone, bank_code, account_number, account_name)
-        limits.check_limits(db, user, TxnType.WITHDRAWAL, amount, wallet.currency)
-        ra = risk.assess(db, user, TxnType.WITHDRAWAL, amount)
-        if ra.blocked:
-            risk.record_alerts(db, ra, user_id=user.id)
-            db.commit()
-            raise Forbidden("This transaction has been held for review. Please contact support.", code="risk_blocked")
-        fee = fees.compute_fee(db, TxnType.WITHDRAWAL, amount, wallet.currency, channel=channel)
-        provider = route(channel, network)
+        score = 0
+        ra = None
+        if user is not None:
+            limits.check_limits(db, user, TxnType.WITHDRAWAL, amount, wallet.currency)
+            ra = risk.assess(db, user, TxnType.WITHDRAWAL, amount)
+            if ra.blocked:
+                risk.record_alerts(db, ra, user_id=user.id)
+                db.commit()
+                raise Forbidden("This transaction has been held for review. Please contact support.",
+                                code="risk_blocked")
+            score = ra.score
+        rate = withdrawal_fee.current_rate(db)
+        fee, net = withdrawal_fee.calculate(amount, rate, wallet.currency)
+        provider = route(channel, network, direction="disbursement")
 
         txn = Transaction(
-            reference=generate_reference("WDR"), type=TxnType.WITHDRAWAL, status=TxnStatus.PENDING,
-            channel=channel, amount=amount, fee=fee, currency=wallet.currency, source_wallet_id=wallet.id,
-            initiated_by_id=user.id, provider=provider.code, provider_mode=provider.mode,
-            counterparty=counterparty, risk_score=ra.score,
+            reference=reference or generate_reference("WDR"), type=TxnType.WITHDRAWAL, status=TxnStatus.PENDING,
+            channel=channel, amount=amount, fee=fee, fee_rate=rate, net_amount=net, currency=wallet.currency,
+            source_wallet_id=wallet.id, initiated_by_id=user.id if user else None, app_id=app_id,
+            business_id=business_id or wallet.business_id, provider=provider.code, provider_mode=provider.mode,
+            counterparty=counterparty, risk_score=score, meta=meta or {},
             description=description or f"Withdrawal to {counterparty.get('label')}")
         db.add(txn)
         db.flush()
         self._hold(txn, wallet)  # raises InsufficientFunds -> nothing committed
-        risk.record_alerts(db, ra, user_id=user.id, transaction_id=txn.id)
-        audit(db, "wallet.withdrawal.initiated", actor_id=user.id, target_type="transaction",
-              target_id=txn.reference, details={"amount": amount, "fee": fee, "channel": channel})
+        if ra is not None:
+            risk.record_alerts(db, ra, user_id=user.id, transaction_id=txn.id)
+        audit(db, "wallet.withdrawal.initiated", actor_id=user.id if user else None,
+              actor_type="user" if user else "api_key", target_type="transaction", target_id=txn.reference,
+              details={"amount": amount, "fee": fee, "fee_rate": rate, "net_amount": net, "channel": channel,
+                       "app_id": str(app_id) if app_id else None})
         db.commit()
         self._send_payout(txn)
         return txn
@@ -188,7 +226,7 @@ class TransactionService:
 
     def _hold(self, txn: Transaction, wallet: Wallet) -> None:
         pending = self.ledger.system_account(SystemAccount.PENDING_PAYOUTS, txn.currency)
-        total = txn.amount + txn.fee
+        total = outflow_total(txn)
         lj = self.ledger.post(kind=f"{txn.type}_hold", reference=f"{txn.reference}:HOLD", description=txn.description,
                               lines=[Line(wallet.ledger_account_id, DR, total), Line(pending.id, CR, total)])
         txn.ledger_transaction_id = lj.id
@@ -200,7 +238,7 @@ class TransactionService:
         cp = txn.counterparty
         try:
             result = provider.disburse(DisbursementRequest(
-                reference=txn.reference, amount=txn.amount, currency=txn.currency, channel=txn.channel,
+                reference=txn.reference, amount=payout_amount(txn), currency=txn.currency, channel=txn.channel,
                 msisdn=cp.get("msisdn"), network=cp.get("network"), bank_code=cp.get("bank_code"),
                 account_number=cp.get("account_number"), account_name=cp.get("name"),
                 description=txn.description, original_reference=(txn.meta or {}).get("original_provider_reference")))
@@ -219,9 +257,11 @@ class TransactionService:
     def _complete_outflow(self, txn: Transaction) -> None:
         pending = self.ledger.system_account(SystemAccount.PENDING_PAYOUTS, txn.currency)
         clearing = self.ledger.system_account(SystemAccount.clearing(txn.provider), txn.currency)
-        lines = [Line(pending.id, DR, txn.amount + txn.fee), Line(clearing.id, CR, txn.amount)]
+        lines = [Line(pending.id, DR, outflow_total(txn)), Line(clearing.id, CR, payout_amount(txn))]
         if txn.fee > 0:
-            lines.append(Line(self.ledger.system_account(SystemAccount.FEE_REVENUE, txn.currency).id, CR, txn.fee))
+            # The withdrawal fee (deducted from the amount) is booked to its own revenue account.
+            purpose = SystemAccount.WITHDRAWAL_FEE_REVENUE if txn.net_amount is not None else SystemAccount.FEE_REVENUE
+            lines.append(Line(self.ledger.system_account(purpose, txn.currency).id, CR, txn.fee))
         lj = self.ledger.post(kind=f"{txn.type}_complete", lines=lines, reference=f"{txn.reference}:DONE",
                               description=txn.description)
         txn.completion_ledger_transaction_id = lj.id
@@ -229,7 +269,9 @@ class TransactionService:
         txn.completed_at = utcnow()
         if txn.initiated_by_id and txn.type == TxnType.WITHDRAWAL:
             notify(self.db, txn.initiated_by_id, "withdrawal", "Withdrawal successful",
-                   f"{txn.currency} {txn.amount:,.2f} sent to {txn.counterparty.get('label')}. Ref {txn.reference}",
+                   f"{txn.currency} {payout_amount(txn):,.2f} sent to {txn.counterparty.get('label')}"
+                   + (f" (fee {txn.currency} {txn.fee:,.2f})" if txn.net_amount is not None and txn.fee else "")
+                   + f". Ref {txn.reference}",
                    {"reference": txn.reference})
 
     def _fail_outflow(self, txn: Transaction, reason: str) -> None:

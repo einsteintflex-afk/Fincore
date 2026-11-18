@@ -17,6 +17,7 @@ const C = lazyNs(() => import("@/pages/customer/CustomerPages"));
 const M = lazyNs(() => import("@/pages/merchant/MerchantPages"));
 const Dev = lazyNs(() => import("@/pages/developer/DeveloperPages"));
 const Admin = lazyNs(() => import("@/pages/admin/AdminPages"));
+const Con = lazyNs(() => import("@/pages/console/ConsolePages"));
 
 function RequireAuth({ children, staff }: { children: ReactNode; staff?: boolean }) {
   const { user, loading } = useAuth();
@@ -33,6 +34,7 @@ export default function App() {
       <Route path="/" element={<P.LandingPage />} />
       <Route path="/login" element={<Auth.LoginPage />} />
       <Route path="/register" element={<Auth.RegisterPage />} />
+      <Route path="/accept-invite" element={<Auth.AcceptInvitePage />} />
       <Route path="/forgot-password" element={<Auth.ForgotPasswordPage />} />
       <Route path="/reset-password" element={<Auth.ResetPasswordPage />} />
       <Route path="/verify-email" element={<Auth.VerifyEmailPage />} />
@@ -74,8 +76,17 @@ export default function App() {
         <Route path="docs" element={<Dev.DeveloperDocs />} />
       </Route>
 
-      <Route path="/admin" element={<RequireAuth staff><AppShell portal="admin" /></RequireAuth>}>
-        <Route index element={<Admin.AdminOverview />} />
+      <Route path="/console" element={<RequireAuth staff><AppShell portal="console" /></RequireAuth>}>
+        <Route index element={<Con.ConsoleOverview />} />
+        <Route path="applications" element={<Con.ConsoleApplications />} />
+        <Route path="applications/:appId" element={<Con.ConsoleApplicationDetail />} />
+        <Route path="transactions" element={<Con.ConsoleTransactions />} />
+        <Route path="payments" element={<Con.ConsolePayments />} />
+        <Route path="settings" element={<Con.ConsoleSettings />} />
+        <Route path="settings/:tab" element={<Con.ConsoleSettings />} />
+      </Route>
+      <Route path="/admin" element={<RequireAuth staff><AppShell portal="console" /></RequireAuth>}>
+        <Route index element={<Navigate to="/console" replace />} />
         <Route path="users" element={<Admin.AdminUsers />} />
         <Route path="users/:userId" element={<Admin.AdminUserDetail />} />
         <Route path="kyc" element={<Admin.AdminKyc />} />

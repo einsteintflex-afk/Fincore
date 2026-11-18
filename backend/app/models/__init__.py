@@ -1,7 +1,15 @@
 from app.core.database import Base
 from app.models import guards  # noqa: F401  (registers DB triggers)
 from app.models.business import Business, BusinessMember, PaymentLink, PaymentRequest, Refund, Settlement
-from app.models.developer import ApiKey, ApiRequestLog, DeveloperApp, WebhookDelivery, WebhookEndpoint
+from app.models.developer import (
+    ApiKey,
+    ApiRequestLog,
+    AppSubscriber,
+    DeveloperApp,
+    SubscriberVerification,
+    WebhookDelivery,
+    WebhookEndpoint,
+)
 from app.models.ledger import IdempotencyRecord, LedgerAccount, LedgerEntry, LedgerTransaction, Wallet
 from app.models.ops import (
     ApprovalRequest,
@@ -21,6 +29,7 @@ from app.models.user import (
     OutboundMessage,
     PasswordResetToken,
     User,
+    UserInvitation,
     UserSession,
 )
 
@@ -30,6 +39,9 @@ __all__ = [
     "ApprovalRequest",
     "ApiKey",
     "ApiRequestLog",
+    "AppSubscriber",
+    "SubscriberVerification",
+    "UserInvitation",
     "AuditLog",
     "Beneficiary",
     "Business",

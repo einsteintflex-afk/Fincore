@@ -10,25 +10,15 @@ registration, admission forms/fees, a mini market. MoMo + card. Direct integrati
 - [x] Session 3: private mode, payment links with custom questions, receipt verification, pay-button code
 - [x] Session 4: card payments (hosted acquirer page, test acquirer with 3-D Secure, refunds to card)
 - [x] Session 5: MTN MoMo Collections as the MoMo channel (TD-022); personal-number collection removed
-
-## Open item
-- MTN sandbox token login returns `login_failed`. In a fresh session on the `fincore` environment: provision a sandbox
-  API user with the saved Collections key (docs/PAYMENT_PROVIDERS.md), run a RequestToPay end to end, record the result.
-  If it still fails, the owner should regenerate the sandbox key or contact MTN developer support.
+- [x] Session 6: 15-seat private dashboard, verified subscribers, 15% withdrawal fee, MTN Disbursements, app isolation,
+      five-section dashboard, backups, Android/Windows builds (see FINCORE_MASTER_PROGRESS.md)
 
 ## Next task (start here)
-**Owner setup wizard ("Get started" screen) for the private deployment.**
+**Real MTN sandbox end-to-end test.** Owner first removes the environment network secret for
+sandbox.momodeveloper.mtn.com and sets fresh sandbox keys in the server environment
+(`FINCORE_MTN_SANDBOX_COLLECTION_*`, `FINCORE_MTN_DISBURSEMENT_PRIMARY_KEY` + `FINCORE_MTN_SANDBOX_DISBURSEMENT_API_USER/KEY`).
+Acceptance: token login 200 for both products; a RequestToPay to an MTN sandbox test number reaches SUCCESSFUL and
+credits the wallet; a Transfer reaches SUCCESSFUL and books the 15% fee; results recorded in FINCORE_MASTER_PROGRESS.md.
 
-Acceptance criteria:
-- First sign-in of a super admin with no businesses shows a guided screen: business name (e.g. Nurses Hub),
-  contact email/phone and settlement bank/MoMo account for payouts (no personal collection numbers — TD-022); creates and auto-approves the business
-  (owner is the platform admin) and sets the settlement destination.
-- Step 2 offers ready-made link templates the owner can tick and price: Registration form, Admission fee,
-  Study package/exam prep, Healthcare registration, Mini-market checkout (amount entered by payer), each with
-  sensible default questions (full name, phone, programme, index number) that remain editable.
-- Step 3 shows the links and pay-button code to copy, and a checklist of what's still needed to go live
-  (MTN keys, acquiring bank, BoG licence) with status read from /admin/providers.
-- Tests (API + browser).
-
-Afterwards: Phase 3 leftovers (Redis rate limiter, Playwright in CI, malware scanning, maker-checker for
-fees/limits, goAML).
+Then: owner setup wizard (business name, settlement account, link templates, go-live checklist); Phase 3 leftovers
+(Redis rate limiter, malware scanning, Playwright in CI); iOS/macOS builds on a Mac.

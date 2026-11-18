@@ -8,3 +8,5 @@ ignore = ["S101", "S105", "S106", "B008", "B904", "S311", "UP017", "UP038", "E50
 
 [lint.per-file-ignores]
 "tests/*" = ["S", "E501", "B"]
+"app/services/backups.py" = ["S603", "S607"]  # fixed PostgreSQL client tools; db names validated
+"app/models/guards.py" = ["S608"]            # DDL built from constants only

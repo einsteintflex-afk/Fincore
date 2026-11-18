@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.8.0 — 2026-11-18 (session 6)
+
+### Added
+- Private dashboard: at most 15 seat-holding accounts including the primary administrator, enforced by a database
+  trigger (advisory-locked) and the API; invitation-only accounts; activate/deactivate/remove/role/resend/revoke
+  sessions/activity; protected primary administrator (code + DB trigger); no privilege escalation.
+- Verified subscribers for connected applications (SMS code or admin verification, app-bound subscriber tokens,
+  enforcement per application, immediate revocation).
+- Configurable withdrawal fee, default 15%, deducted from the requested amount; quote endpoint and review screen;
+  per-transaction rate and net amount; separate `WITHDRAWAL_FEE_REVENUE` ledger account; stale-fee protection.
+- MTN MoMo Disbursements wired for withdrawals and application payouts (`FINCORE_MTN_DISBURSEMENT_PRIMARY_KEY`,
+  separate API user/key, no simulator fallback).
+- Applications: permissions, activation, per-app isolation of charges/payouts/webhooks, payout API, key rotation.
+- Five-section dashboard (Overview, Applications, Transactions, Payments, Settings).
+- Backups: `backup`, `verify-backup`, `restore` (new database only), automatic worker backups, Settings → Backups.
+- Android (Capacitor) and Windows/macOS/Linux (Tauri) packaging; signed APK/AAB and Windows installer built;
+  iOS Xcode project generated; packaged apps keep refresh tokens in memory only.
+- `tests/test_private_platform.py` (32 tests), frontend `console.test.tsx`, browser `e2e/console.cjs`.
+
+### Changed
+- Public registration removed (`/auth/register` returns 403); `private-mode` CLI removed (always private).
+- Withdrawals no longer use fee rules (deactivated, kept for history).
+- Webhooks for app-created records are delivered only to that app.
+- MTN routing checks Collections and Disbursements configuration separately.
+
 ## 0.7.0 — 2026-11-18 (session 5, continued)
 
 ### Removed

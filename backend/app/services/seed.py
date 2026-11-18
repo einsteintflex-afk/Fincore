@@ -20,8 +20,8 @@ FEES = [
     # name, type, channel, payer, flat, percent, min, max
     ("Wallet-to-wallet transfer", "transfer", "wallet", "customer", "0", "0", "0", None),
     ("Mobile money deposit", "deposit", "mobile_money", "customer", "0", "0", "0", None),
-    ("Withdrawal to mobile money", "withdrawal", "mobile_money", "customer", "0", "0.0075", "0.50", "15.00"),
-    ("Withdrawal to bank", "withdrawal", "bank", "customer", "2.00", "0", "2.00", "2.00"),
+    # Withdrawals are charged by the configurable withdrawal fee (Settings → Withdrawal fee, default 15%,
+    # deducted from the requested amount) — see services/withdrawal_fee.py — not by a fee rule.
     ("Merchant payment (MDR)", "payment", None, "merchant", "0", "0.0150", "0.10", "200.00"),
     ("Merchant card payment (MDR)", "payment", "card", "merchant", "0", "0.0250", "0.20", "500.00"),
     ("Settlement to bank", "settlement", "bank", "merchant", "0", "0", "0", None),
@@ -42,7 +42,7 @@ LIMITS = {
 
 SETTINGS = {
     "maintenance_mode": ({"enabled": False, "message": ""}, "Block all money movement with a banner message"),
-    "signup_enabled": ({"enabled": True}, "Allow new customer registrations"),
+    "withdrawal_fee": ({"percent": "15"}, "Withdrawal fee (% of the requested amount, deducted from the payout)"),
     "approval_thresholds": ({"adjustment": "1000.00", "reversal": "5000.00"},
                             "Amounts (GHS) above which a second staff member must approve"),
     "support_contact": ({"email": "support@fincore.example", "phone": "+233 30 000 0000"}, "Customer support contacts"),
@@ -69,7 +69,7 @@ def seed_reference_data(db: Session) -> dict:
                                  daily_max=D(daily), monthly_max=D(monthly)))
                 created["limits"] += 1
     ledger = LedgerService(db)
-    for purpose in (SystemAccount.FEE_REVENUE, SystemAccount.PENDING_PAYOUTS, SystemAccount.SUSPENSE,
+    for purpose in (SystemAccount.FEE_REVENUE, SystemAccount.WITHDRAWAL_FEE_REVENUE, SystemAccount.PENDING_PAYOUTS, SystemAccount.SUSPENSE,
                     SystemAccount.ADJUSTMENTS, SystemAccount.EQUITY, SystemAccount.clearing("sandbox")):
         ledger.system_account(purpose, "GHS")
     for key, (value, desc) in SETTINGS.items():

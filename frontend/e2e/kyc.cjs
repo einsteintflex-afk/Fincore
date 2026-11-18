@@ -7,12 +7,14 @@ const SP = process.argv[2];
   async function page(vp) { const p = await (await b.newContext({ viewport: vp })).newPage(); await p.route(/fonts\.(googleapis|gstatic)/, r => r.abort()); p.on('pageerror', e => errs.push(e.message)); return p; }
   const step = async (n, f) => { try { await f(); console.log('✓', n); } catch (e) { console.log('✗', n, e.message.split('\n')[0]); throw e; } };
   const c = await page({ width: 390, height: 900 });
-  const email = `kofi${Date.now()}@example.com`;
-  await step('register', async () => {
-    await c.goto('http://localhost:5173/register');
-    await c.getByLabel('Full name').fill('Kofi Asare'); await c.getByLabel('Email').fill(email);
-    await c.getByLabel('Mobile number').fill('054' + String(Date.now()).slice(-7)); await c.getByLabel('Password').fill('Str0ngPass!word');
-    await c.getByRole('button', { name: 'Create account' }).click(); await c.getByText('Hello, Kofi').waitFor({ timeout: 8000 });
+  // No public sign-up: an administrator invites the user (Settings → Users) and passes the link in INVITE_LINK.
+  await step('accept invitation', async () => {
+    if (!process.env.INVITE_LINK) throw new Error('set INVITE_LINK to an invitation link from Settings → Users');
+    await c.goto(process.env.INVITE_LINK.replace(/^https?:\/\/[^/]+/, 'http://localhost:5173'));
+    await c.getByLabel('Password', { exact: true }).fill('Str0ngPass!word');
+    await c.getByLabel('Confirm password').fill('Str0ngPass!word');
+    await c.getByRole('button', { name: 'Set password and sign in' }).click();
+    await c.getByText('Hello, ').first().waitFor({ timeout: 8000 });
   });
   await step('submit is blocked until required documents are uploaded', async () => {
     await c.goto('http://localhost:5173/app/verification');

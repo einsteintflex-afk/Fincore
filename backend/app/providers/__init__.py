@@ -53,7 +53,8 @@ def _simulator(sandbox: bool) -> PaymentProvider:
     return get_provider("sandbox")
 
 
-def route(channel: str, network: str | None = None, *, sandbox: bool = False) -> PaymentProvider:
+def route(channel: str, network: str | None = None, *, sandbox: bool = False,
+          direction: str = "collection") -> PaymentProvider:
     """Choose the provider for a channel/network.
 
     * Developer sandbox-key traffic (``sandbox=True``) always uses the simulator.
@@ -64,11 +65,20 @@ def route(channel: str, network: str | None = None, *, sandbox: bool = False) ->
     if sandbox:
         return get_provider("sandbox")
     if channel == "mobile_money" and network == "mtn":
+        # Collections (RequestToPay) and Disbursements (Transfer) are separate MTN products with separate keys;
+        # each must be configured on its own. Never fall back from MTN to the simulator silently.
         mode = settings.mtn_momo_mode
-        if mode == "sandbox":
-            return get_provider("mtn_momo_sandbox")
-        if mode == "production" and settings.live_payments_enabled:
-            return get_provider("mtn_momo")
+        code = {"sandbox": "mtn_momo_sandbox",
+                "production": "mtn_momo" if settings.live_payments_enabled else None}.get(mode)
+        if code:
+            provider = get_provider(code)
+            product = "disbursement" if direction == "disbursement" else "collection"
+            if not provider.is_configured(product):
+                raise ProviderNotConfigured(
+                    f"MTN MoMo {product} is not configured for {mode} (set the FINCORE_MTN_"
+                    f"{'SANDBOX' if mode == 'sandbox' else 'PRODUCTION'}_{product.upper()}_* keys"
+                    + (" or FINCORE_MTN_DISBURSEMENT_PRIMARY_KEY" if product == "disbursement" else "") + ")")
+            return provider
         return _simulator(sandbox)
     if not settings.live_payments_enabled:
         return _simulator(sandbox)
@@ -89,8 +99,14 @@ def provider_status() -> list[dict]:
     out = []
     for code, cls in PROVIDER_CLASSES.items():
         p = get_provider(code)
-        out.append({"code": code, "name": cls.display_name, "configured": p.is_configured(),
-                    "mode": p.mode, "collection": cls.supports_collection, "disbursement": cls.supports_disbursement})
+        row = {"code": code, "name": cls.display_name, "configured": p.is_configured(),
+               "mode": p.mode, "collection": cls.supports_collection, "disbursement": cls.supports_disbursement}
+        if hasattr(p, "configured_products"):
+            try:
+                row["products"] = p.configured_products()
+            except Exception:  # noqa: BLE001 — a mixed sandbox/production profile is reported, not raised
+                row["products"] = {"collection": False, "disbursement": False}
+        out.append(row)
     return out
 
 

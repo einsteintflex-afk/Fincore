@@ -8,7 +8,7 @@ const { chromium } = require('playwright'); const { execSync } = require('child_
   await step('private landing + sign-up closed', async () => {
     await pub.goto('http://localhost:5173/'); await pub.getByText('Private payment system').waitFor();
     await pub.screenshot({ path: SP + '/shots/private_landing.png' });
-    await pub.goto('http://localhost:5173/register'); await pub.getByText('Sign-up is closed').waitFor();
+    await pub.goto('http://localhost:5173/register'); await pub.getByText('Invitation only').waitFor();
   });
   const m = await page({ width: 1280, height: 900 });
   let slug;

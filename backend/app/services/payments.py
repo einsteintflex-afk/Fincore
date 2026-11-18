@@ -279,7 +279,7 @@ class PaymentService:
             self._mark_paid(pr)
         elif status == "failed":
             pr.status, pr.failure_reason = PaymentStatus.FAILED, message
-            webhooks.emit(self.db, pr.business_id, "charge.failed", charge_view(pr), environment=pr.environment)
+            webhooks.emit_pr(self.db, pr, "charge.failed", charge_view(pr), environment=pr.environment)
         else:
             pr.status = PaymentStatus.PROCESSING
 
@@ -292,7 +292,7 @@ class PaymentService:
             link.payments_count += 1
             if link.single_use:
                 link.active = False
-        webhooks.emit(self.db, pr.business_id, "charge.success", charge_view(pr), environment=pr.environment)
+        webhooks.emit_pr(self.db, pr, "charge.success", charge_view(pr), environment=pr.environment)
         biz = self.db.get(Business, pr.business_id)
         notify(self.db, biz.owner_user_id, "payment_received", "Payment received",
                f"{pr.currency} {pr.amount:,.2f} received ({pr.reference})"
@@ -325,7 +325,7 @@ class PaymentService:
         if pr.environment != "live":
             refund.status = "successful"
             self._apply_refund_amount(pr, amount)
-            webhooks.emit(db, pr.business_id, "refund.processed", self.refund_view(refund, pr),
+            webhooks.emit_pr(db, pr, "refund.processed", self.refund_view(refund, pr),
                           environment=pr.environment)
             db.commit()
             return refund
@@ -357,7 +357,7 @@ class PaymentService:
             if payer_wallet.user_id:
                 notify(db, payer_wallet.user_id, "refund", "Refund received",
                        f"{biz.trading_name or biz.name} refunded {pr.currency} {amount:,.2f}.")
-            webhooks.emit(db, pr.business_id, "refund.processed", self.refund_view(refund, pr), environment="live")
+            webhooks.emit_pr(db, pr, "refund.processed", self.refund_view(refund, pr), environment="live")
             audit(db, "payment.refunded", actor_id=actor.id if actor else None, target_type="payment",
                   target_id=pr.reference, details={"amount": amount, "refund": refund.reference})
             db.commit()
@@ -523,7 +523,7 @@ def on_transaction_final(db: Session, txn: Transaction) -> None:
             elif txn.status == TxnStatus.FAILED:
                 pr.status, pr.failure_reason = PaymentStatus.FAILED, txn.failure_reason
                 pr.meta = {**(pr.meta or {}), "provider_outcome": (txn.meta or {}).get("provider_outcome", "failed")}
-                webhooks.emit(db, pr.business_id, "charge.failed", charge_view(pr), environment=pr.environment)
+                webhooks.emit_pr(db, pr, "charge.failed", charge_view(pr), environment=pr.environment)
     elif txn.type == TxnType.REFUND and meta.get("refund_reference"):
         refund = db.scalar(select(Refund).where(Refund.reference == meta["refund_reference"]))
         pr = db.get(PaymentRequest, refund.payment_request_id) if refund else None
@@ -531,12 +531,17 @@ def on_transaction_final(db: Session, txn: Transaction) -> None:
             if txn.status == TxnStatus.SUCCESSFUL:
                 refund.status = "successful"
                 PaymentService(db)._apply_refund_amount(pr, refund.amount)
-                webhooks.emit(db, pr.business_id, "refund.processed", PaymentService.refund_view(refund, pr),
+                webhooks.emit_pr(db, pr, "refund.processed", PaymentService.refund_view(refund, pr),
                               environment="live")
             elif txn.status == TxnStatus.FAILED:
                 refund.status = "failed"
-                webhooks.emit(db, pr.business_id, "refund.failed", PaymentService.refund_view(refund, pr),
+                webhooks.emit_pr(db, pr, "refund.failed", PaymentService.refund_view(refund, pr),
                               environment="live")
+    elif txn.type == TxnType.WITHDRAWAL and txn.app_id and txn.business_id:
+        from app.services.payouts import payout_out  # local import avoids a cycle
+
+        event = "payout.successful" if txn.status == TxnStatus.SUCCESSFUL else "payout.failed"
+        webhooks.emit(db, txn.business_id, event, payout_out(txn), environment="live", app_id=txn.app_id)
     elif txn.type == TxnType.SETTLEMENT and meta.get("settlement_reference"):
         s = db.scalar(select(Settlement).where(Settlement.reference == meta["settlement_reference"]))
         if s and s.status in ("pending", "processing"):

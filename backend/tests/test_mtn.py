@@ -96,12 +96,21 @@ def test_routing_by_mode(monkeypatch):
     monkeypatch.setattr(settings, "mtn_momo_mode", "off")
     assert route("mobile_money", "mtn").code == "sandbox"
     monkeypatch.setattr(settings, "mtn_momo_mode", "sandbox")
+    with pytest.raises(ProviderNotConfigured):  # never falls back to the simulator when MTN is selected
+        route("mobile_money", "mtn")
+    monkeypatch.setattr(settings, "mtn_sandbox_collection_subscription_key", "sub")
+    monkeypatch.setattr(settings, "mtn_sandbox_collection_api_user", "user")
+    monkeypatch.setattr(settings, "mtn_sandbox_collection_api_key", "key")
     assert route("mobile_money", "mtn").code == "mtn_momo_sandbox"
+    with pytest.raises(ProviderNotConfigured):  # Disbursements need their own credentials
+        route("mobile_money", "mtn", direction="disbursement")
     assert route("mobile_money", "mtn", sandbox=True).code == "sandbox"  # developer test keys stay simulated
     assert route("mobile_money", "telecel").code == "sandbox"            # only MTN is integrated
     monkeypatch.setattr(settings, "mtn_momo_mode", "production")
     assert route("mobile_money", "mtn").code == "sandbox"  # production keys unused until live payments are on
     monkeypatch.setattr(settings, "live_payments_enabled", True)
+    for k in ("subscription_key", "api_user", "api_key"):
+        monkeypatch.setattr(settings, f"mtn_production_collection_{k}", "x")
     assert route("mobile_money", "mtn").code == "mtn_momo"
 
 

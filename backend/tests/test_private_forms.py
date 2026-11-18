@@ -75,14 +75,13 @@ def test_edit_link_price_and_questions(active_business):
 def test_private_mode_and_staff_accounts(client, admin):
     from tests.conftest import last_email, token_from
 
-    admin.put("/admin/settings/signup_enabled", {"value": {"enabled": False}})
     assert client.get("/api/v1/platform").json()["signup_enabled"] is False
     r = client.post("/api/v1/auth/register", json={"email": "x@example.com", "password": PASSWORD, "full_name": "X Y"})
     assert r.status_code == 403
     r = admin.post("/admin/users", {"email": "efua@example.com", "full_name": "Efua Staff", "role": "finance"})
-    assert r.status_code == 201 and r.json()["role"] == "finance"
+    assert r.status_code == 201 and r.json()["role"] == "finance" and r.json()["status"] == "invited"
     token = token_from(last_email("efua@example.com"))
-    assert client.post("/api/v1/auth/password/reset", json={"token": token, "new_password": "Efua!Pass2026x"}).status_code == 200
+    assert client.post("/api/v1/auth/invitation/accept", json={"token": token, "password": "Efua!Pass2026x"}).status_code == 200
     assert client.post("/api/v1/auth/login", json={"email": "efua@example.com", "password": "Efua!Pass2026x"}).status_code == 200
 
 

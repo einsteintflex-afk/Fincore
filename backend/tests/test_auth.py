@@ -1,41 +1,52 @@
 import pyotp
+import pytest
 from sqlalchemy import select
 
 from app.core.database import SessionLocal
+from app.core.errors import Conflict, ValidationFailed
 from app.core.security import decrypt
 from app.models import User
+from app.services import team
+from app.services.auth import email_verification_token
 from tests.conftest import PASSWORD, last_email, token_from
 
 API = "/api/v1"
 
 
 def register(client, email="ama@example.com", password=PASSWORD, phone="0241112233"):
-    return client.post(f"{API}/auth/register", json={"email": email, "password": password, "full_name": "Ama Owusu",
-                                                     "phone": phone})
+    """No public registration: create the account the way an administrator/CLI does (bound by the seat limit)."""
+    with SessionLocal() as s:
+        return team.create_user(s, email=email, password=password, full_name="Ama Owusu", phone=phone)
 
 
 def login(client, email="ama@example.com", password=PASSWORD):
     return client.post(f"{API}/auth/login", json={"email": email, "password": password})
 
 
-def test_register_creates_user_and_ghs_wallet(client):
-    r = register(client)
-    assert r.status_code == 201, r.text
-    assert r.json()["phone"] == "233241112233"
+def test_public_registration_is_disabled(client):
+    r = client.post(f"{API}/auth/register", json={"email": "ama@example.com", "password": PASSWORD,
+                                                  "full_name": "Ama Owusu", "phone": "0241112233"})
+    assert r.status_code == 403 and r.json()["error"]["code"] == "public_registration_disabled"
+    assert client.get(f"{API}/platform").json()["signup_enabled"] is False
+
+
+def test_created_user_has_ghs_wallet(client):
+    u = register(client)
+    assert u.phone == "233241112233"
     tok = login(client).json()["access_token"]
     wallets = client.get(f"{API}/wallets", headers={"Authorization": f"Bearer {tok}"}).json()
     assert len(wallets) == 1 and wallets[0]["currency"] == "GHS" and wallets[0]["balance"] == "0.00"
     assert len(wallets[0]["account_number"]) == 10
 
 
-def test_register_rejects_duplicates_and_weak_passwords(client):
-    assert register(client).status_code == 201
-    r = register(client)
-    assert r.status_code == 409 and r.json()["error"]["code"] == "email_taken"
-    r = register(client, email="x@example.com", password="alllowercase1", phone=None)
-    assert r.status_code == 422
-    r = register(client, email="y@example.com", phone="0111111111")
-    assert r.status_code == 422
+def test_account_creation_rejects_duplicates_and_weak_passwords(client):
+    register(client)
+    with pytest.raises(Conflict):
+        register(client)
+    with pytest.raises(ValidationFailed):
+        register(client, email="x@example.com", password="alllowercase1", phone=None)
+    with pytest.raises(ValidationFailed):
+        register(client, email="y@example.com", phone="0111111111")
 
 
 def test_login_lockout_after_failed_attempts(client):
@@ -80,8 +91,10 @@ def test_password_reset_flow(client):
 def test_email_verification(client):
     register(client)
     with SessionLocal() as s:
-        body = s.scalar(select(User)).email
-    token = token_from(last_email(body))
+        u = s.scalar(select(User))
+        u.email_verified = False
+        s.commit()
+        token = email_verification_token(u)
     assert client.post(f"{API}/auth/verify-email", params={"token": token}).status_code == 200
     tok = login(client).json()["access_token"]
     assert client.get(f"{API}/me", headers={"Authorization": f"Bearer {tok}"}).json()["email_verified"] is True

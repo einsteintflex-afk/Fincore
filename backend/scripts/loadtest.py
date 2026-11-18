@@ -1,9 +1,11 @@
 """Simple concurrent load test for the money-movement hot path.
 
-Creates N customers, funds them through the sandbox, then fires concurrent wallet transfers in a ring and
+Signs in with existing dashboard accounts (FinCore is invitation-only and limited to 15 seats, so the script
+does not create users), funds them through the sandbox, then fires concurrent wallet transfers in a ring and
 reports throughput, latency percentiles and a ledger-integrity check.
 
-    python scripts/loadtest.py --base http://localhost:8000 --users 20 --transfers 400 --concurrency 20
+    python scripts/loadtest.py --base http://localhost:8000 --accounts a@x.com,b@y.com --password ... \
+        --transfers 400 --concurrency 20
 
 Only run against development/staging environments with live payments disabled.
 """
@@ -18,13 +20,13 @@ import uuid
 
 import httpx
 
-PASSWORD = "LoadTest!Pass2026"
-
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:8000")
-    ap.add_argument("--users", type=int, default=20)
+    ap.add_argument("--accounts", default="ama@fincore.demo,kofi@fincore.demo",
+                    help="comma-separated existing accounts (at least 2)")
+    ap.add_argument("--password", default="Demo!Pass2026")
     ap.add_argument("--transfers", type=int, default=400)
     ap.add_argument("--concurrency", type=int, default=20)
     args = ap.parse_args()
@@ -36,10 +38,8 @@ def main() -> None:
 
     users = []
     run = uuid.uuid4().hex[:6]
-    for i in range(args.users):
-        email = f"load-{run}-{i}@example.com"
-        client.post(f"{api}/auth/register", json={"email": email, "password": PASSWORD, "full_name": f"Load {i}"})
-        tok = client.post(f"{api}/auth/login", json={"email": email, "password": PASSWORD}).json()["access_token"]
+    for email in args.accounts.split(","):
+        tok = client.post(f"{api}/auth/login", json={"email": email.strip(), "password": args.password}).json()["access_token"]
         h = {"Authorization": f"Bearer {tok}"}
         w = client.get(f"{api}/wallets", headers=h).json()[0]
         r = client.post(f"{api}/deposits", headers=h, json={"wallet_id": w["id"], "amount": "200", "phone": "0241234567"})

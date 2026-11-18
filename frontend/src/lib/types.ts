@@ -10,6 +10,7 @@ export interface User {
   kyc_tier: number;
   email_verified: boolean;
   totp_enabled: boolean;
+  is_primary_admin?: boolean;
   created_at: string;
   last_login_at: string | null;
 }
@@ -33,6 +34,9 @@ export interface Transaction {
   channel: string;
   amount: Money;
   fee: Money;
+  fee_rate?: Money | null;
+  net_amount?: Money | null;
+  app_id?: string | null;
   currency: string;
   provider: string | null;
   provider_mode: string;
@@ -131,5 +135,6 @@ export interface Platform {
   maintenance: { enabled: boolean; message?: string };
   support: { email?: string; phone?: string };
   signup_enabled?: boolean;
+  max_dashboard_users?: number;
   mtn_mode?: "off" | "sandbox" | "production";
 }

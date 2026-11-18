@@ -15,7 +15,7 @@ export function useGet<T = any>(key: QueryKey, path: string | null, query?: Requ
 /** Mutation that shows a toast and invalidates the given query keys on success. */
 export function useAction<TVars = any, TRes = any>(
   fn: (vars: TVars) => Promise<TRes>,
-  { success, invalidate = [], onSuccess }: { success?: string | ((r: TRes) => string); invalidate?: QueryKey[]; onSuccess?: (r: TRes) => void } = {},
+  { success, invalidate = [], onSuccess, onError }: { success?: string | ((r: TRes) => string); invalidate?: QueryKey[]; onSuccess?: (r: TRes) => void; onError?: (e: Error) => void } = {},
 ) {
   const qc = useQueryClient();
   const toast = useToast();
@@ -26,7 +26,10 @@ export function useAction<TVars = any, TRes = any>(
       if (success) toast.success(typeof success === "function" ? success(res) : success);
       onSuccess?.(res);
     },
-    onError: (e) => toast.error(e),
+    onError: (e) => {
+      toast.error(e);
+      onError?.(e);
+    },
   });
 }
 

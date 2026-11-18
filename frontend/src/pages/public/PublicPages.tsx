@@ -1,10 +1,10 @@
 import { ArrowRight, Building2, CheckCircle2, Code2, Lock, ShieldCheck, Smartphone, Wallet, XCircle } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SandboxBanner } from "@/components/Layout";
 import { Alert, Badge, Button, ErrorState, Input, Select, Spinner } from "@/components/ui";
-import { api } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { api, isNativeApp } from "@/lib/api";
+import { isStaff, useAuth } from "@/lib/auth";
 import { amountError, detectNetwork, money, NETWORKS } from "@/lib/format";
 import { useGet, usePlatform, useWallets } from "@/lib/hooks";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,7 +12,8 @@ import { useQueryClient } from "@tanstack/react-query";
 export function LandingPage() {
   const { user } = useAuth();
   const platform = usePlatform();
-  if (platform.data && platform.data.signup_enabled === false) return <PrivateLanding signedIn={!!user} />;
+  if (isNativeApp()) return <Navigate to={user ? (isStaff(user) ? "/console" : "/app") : "/login"} replace />;
+  if (platform.data && platform.data.signup_enabled === false) return <PrivateLanding signedIn={!!user} staff={isStaff(user)} />;
   const features = [
     { icon: <Wallet />, title: "GHS wallets", body: "Instant wallet-to-wallet transfers, statements and beneficiaries." },
     { icon: <Smartphone />, title: "Mobile money", body: "Top up from and cash out to MTN MoMo, Telecel Cash and AT Money." },
@@ -71,14 +72,14 @@ export function LandingPage() {
   );
 }
 
-function PrivateLanding({ signedIn }: { signedIn: boolean }) {
+function PrivateLanding({ signedIn, staff }: { signedIn: boolean; staff: boolean }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-brand-950 to-ink-900 px-4 text-center text-white">
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-700 text-2xl font-bold text-gold-400">F</span>
       <h1 className="mt-5 text-3xl font-semibold">FinCore</h1>
       <p className="mt-2 max-w-sm text-brand-100">Private payment system. Authorised staff only.</p>
       <div className="mt-8 flex flex-wrap justify-center gap-3">
-        <Link to={signedIn ? "/merchant" : "/login"}><Button variant="gold" size="lg">{signedIn ? "Open dashboard" : "Sign in"}</Button></Link>
+        <Link to={signedIn ? (staff ? "/console" : "/app") : "/login"}><Button variant="gold" size="lg">{signedIn ? "Open dashboard" : "Sign in"}</Button></Link>
         <Link to="/verify"><Button variant="secondary" size="lg">Verify a receipt</Button></Link>
       </div>
     </div>
